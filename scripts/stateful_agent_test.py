@@ -19,7 +19,7 @@ class StatefulController(Controller):
         self.y = y
         self.z = z
 
-    def action_to_control_input(self, time: jnp.float64, state: Array, action: Array) -> tuple[Array, Self]:
+    def action_to_control_input(self, time: jnp.float32, state: Array, action: Array) -> tuple[Array, Self]:
         dx = state[0] - self.x
         return (action * time * jnp.sin(jnp.linalg.norm(state.at[0].set(dx)))), StatefulController(dx, self.y, self.z)
     
@@ -35,7 +35,7 @@ class StatefulDynamics(Dynamics):
     def __init__(self, x=1.0):
         self.x = x
 
-    def control_input_to_delta_state(self, time: jnp.float64, state: Array, control_input: Array, wind_vector: Array) -> tuple[Array, Self]:
+    def control_input_to_delta_state(self, time: jnp.float32, state: Array, control_input: Array, wind_vector: Array) -> tuple[Array, Self]:
         x = self.x * self.x
         return (control_input * x), StatefulDynamics(x)
     

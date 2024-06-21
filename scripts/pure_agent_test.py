@@ -12,7 +12,7 @@ use with an agent.
 
 class PureController(Controller):
 
-    def action_to_control_input(self, time: jnp.float64, state: Array, action: Array) -> tuple[Array, Self]:
+    def action_to_control_input(self, time: jnp.float32, state: Array, action: Array) -> tuple[Array, Self]:
         return (action * time * jnp.linalg.norm(state)), self
     
     def tree_flatten(self):
@@ -24,7 +24,7 @@ class PureController(Controller):
 
 class PureDynamics(Dynamics):
 
-    def control_input_to_delta_state(self, time: jnp.float64, state: Array, control_input: Array, wind_vector: Array) -> tuple[Array, Self]:
+    def control_input_to_delta_state(self, time: jnp.float32, state: Array, control_input: Array, wind_vector: Array) -> tuple[Array, Self]:
         return jnp.sin(time) + control_input / (time+1), self
     
     def tree_flatten(self):

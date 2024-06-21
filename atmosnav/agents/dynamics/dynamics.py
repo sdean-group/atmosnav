@@ -12,5 +12,5 @@ class Dynamics(JaxTree):
     """ """
 
     @abc.abstractmethod
-    def control_input_to_delta_state(self, time: jnp.float64, state: Array, control_input: Array, wind_vector: Array) -> tuple[Array, Self]:
+    def control_input_to_delta_state(self, time: jnp.float32, state: Array, control_input: Array, wind_vector: Array) -> tuple[Array, Self]:
         """ """
