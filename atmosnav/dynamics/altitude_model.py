@@ -5,6 +5,18 @@ from jax import Array, lax
 from ..jaxtree import JaxTree
 import math
 
+class SimpleAltitudeModel(Dynamics):
+    def control_input_to_delta_state(self, time: jnp.float32, state: Array, control_input: Array, wind_vector: Array):
+        return jnp.sum(control_input)/2.0, self
+
+    def tree_flatten(self):
+        return tuple(), {}
+    
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return SimpleAltitudeModel()
+
+
 SinApproxT = 10 * 60
 
 
