@@ -5,6 +5,13 @@ import jax.numpy as jnp
 import jax
 import numpy as np
 
+"""
+This script reads wind data and runs a weather balloon and runs simulations starting
+from Ithaca while following a plan.
+
+Runs many iterations of the same plan to show that it is fast.
+"""
+
 # The wind data directory
 DATA_PATH = "../neotraj/data/proc/gfsanl/uv"
 
@@ -74,5 +81,7 @@ def run(start_time, balloon, plan, wind):
     return jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon, log))[1:]
 
 
-balloon, log = run(START_TIME, balloon, plan, wind)
+for i in range(100):
+    print(i)
+    _, log = run(START_TIME, balloon, plan, wind)
 tplt.plot_on_map(log)
