@@ -33,7 +33,7 @@ class Airborne(JaxTree):
         self.dynamics = dynamics
 
 
-    def step(self, time: jnp.float32, action: Array, wind_vector: Array) -> Self:
+    def step(self, time: jnp.float32, action: Array, wind_vector: Array) -> tuple[Self, dict]:
         """ Returns an updated agent at the next time step. 
         
         Args:
@@ -43,10 +43,11 @@ class Airborne(JaxTree):
 
         Returns:
             (Agent): the updated agent
+            (Dictionary): info dictionary containing control_input
         """
         control_input, controller = self.controller.action_to_control_input(time, self.state, action)
         delta_state, dynamics = self.dynamics.control_input_to_delta_state(time, self.state, control_input, wind_vector)
-        return Airborne(self.state + delta_state, controller, dynamics)
+        return Airborne(self.state + delta_state, controller, dynamics), {'control_input':control_input}
     
     def tree_flatten(self):
         return (self.state, self.controller, self.dynamics), {}
