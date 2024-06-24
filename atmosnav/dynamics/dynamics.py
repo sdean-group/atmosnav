@@ -1,7 +1,7 @@
 from typing import Self
 
 import abc
-from ...jaxtree import JaxTree
+from ..jaxtree import JaxTree
 
 import jax.numpy as jnp
 from jax import Array

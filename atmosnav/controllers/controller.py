@@ -2,7 +2,7 @@ from typing import Self
 
 import abc
 import jax.numpy as jnp
-from ...jaxtree import JaxTree
+from ..jaxtree import JaxTree
 
 from jax import Array
 import jax

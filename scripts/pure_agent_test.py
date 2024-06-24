@@ -1,5 +1,5 @@
 from typing import Self
-from atmosnav import Agent, Controller, Dynamics
+from atmosnav import Airborne, Controller, Dynamics
 import jax
 import jax.numpy as jnp
 from jax import Array
@@ -35,7 +35,7 @@ class PureDynamics(Dynamics):
         return cls()
 
 
-agent = Agent(jnp.array([ 0.0, 0.0, 0.0 ]), PureController(), PureDynamics())
+agent = Airborne(jnp.array([ 0.0, 0.0, 0.0 ]), PureController(), PureDynamics())
 
 @jax.jit
 def fast_run(agent):

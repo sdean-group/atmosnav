@@ -1,5 +1,5 @@
 from typing import Self
-from atmosnav import Agent, Controller, Dynamics
+from atmosnav import Airborne, Controller, Dynamics
 import jax
 import jax.numpy as jnp
 from jax import Array
@@ -47,7 +47,7 @@ class StatefulDynamics(Dynamics):
         return cls(*children)
 
 
-agent = Agent(jnp.array([ 3.0, 2.0, 1.0 ]), StatefulController(), StatefulDynamics())
+agent = Airborne(jnp.array([ 3.0, 2.0, 1.0 ]), StatefulController(), StatefulDynamics())
 
 @jax.jit
 def fast_run_with_log(agent):
