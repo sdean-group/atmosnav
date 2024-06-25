@@ -82,17 +82,17 @@ def run(start_time, balloon, plan, wind):
 
 
 from functools import partial 
-@partial(jax.jit, static_argnums=(1,2))
-@partial(jax.grad, argnums=4)
-def gradient_at(start_time, waypoint_time_step, integration_time_step, balloon, plan, wind):
-    N = (len(plan)*waypoint_time_step)//integration_time_step
+@jax.jit
+@partial(jax.grad, argnums=2)
+def gradient_at(start_time, balloon, plan, wind):
+    N = (len(plan)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
     def inner_run(i, time_balloon):
         time, balloon = time_balloon
         # step the agent in time
         next_balloon, _ =balloon.step(time, plan, wind.get_direction(time, balloon.state))
 
         # jump dt
-        next_time = time + 60*10
+        next_time = time + INTEGRATION_TIME_STEP
 
         return next_time, next_balloon
 
@@ -104,7 +104,7 @@ def gradient_at(start_time, waypoint_time_step, integration_time_step, balloon, 
 
 for i in range(100):
     print(i)
-    d_plan = gradient_at(START_TIME, WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP, balloon, plan, wind)
+    d_plan = gradient_at(START_TIME, balloon, plan, wind)
     plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
 
 
