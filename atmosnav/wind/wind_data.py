@@ -2,10 +2,13 @@ import os
 import jax
 import math
 import numpy as np
-from jax import lax, tree_util
 import jax.numpy as jnp
 from dataclasses import dataclass
 import json
+
+from .wind import Wind
+
+from ..utils import *
 
 @dataclass
 class WindCfg:
@@ -20,50 +23,7 @@ class WindCfg:
     lon_min: float = 0.0
     lon_d: float = 0.0
 
-def p2alt(pressure):
-    """
-    Converts air pressure to altitude.
-    """
-    return lax.cond(
-        pressure > 22632.1,
-        lambda p:44330.7 * (1 - (p / 101325.0) ** 0.190266) / 1000.0,
-        lambda p: -6341.73 * jnp.log((0.176481 * p) / 22632.1) / 1000.0,
-        operand=pressure
-    )
-
-def alt2p(altitude: float) -> float:
-    """
-    Converts altitude to air pressure.
-    """
-    return jax.lax.cond(
-        altitude <= 11,
-        lambda alt: jax.lax.cond(
-            alt < 0, 
-            lambda _: 0.0, 
-            lambda al: 3.83325e-20 * (44330.7 - al * 1000)**5.255799,
-            operand=alt),
-        lambda alt: 128241. *jnp.exp(-0.000157686 * alt * 1000),
-        operand=altitude)
-
-def bisect_left_jax(arr, x):
-    arr = jax.numpy.asarray(arr)
-    low, high = 0, len(arr)
-    
-    def cond_fun(state):
-        low, high = state
-        return low < high
-    
-    def body_fun(state):
-        low, high = state
-        mid = (low + high) // 2
-        update = (arr[mid] < x)
-        return (jax.lax.select(update, mid + 1, low), jax.lax.select(update, high, mid))
-    
-    low, _ = jax.lax.while_loop(cond_fun, body_fun, (low, high))
-    return low
-
-
-class Wind:
+class WindFromData(Wind):
     
     def _load_data(dname, start_time):
         """
@@ -119,8 +79,8 @@ class Wind:
         """
         Construct the Wind instance from the data path, start time, and the integration time step.
         """
-        wind_ts, wind_data, wind_legacy_levels, wind_cfg = Wind._load_data(path, start_time)
-        return Wind(wind_data, wind_ts, wind_legacy_levels, wind_cfg, integration_time_step / (2.0 * math.pi * 6371008.0 / 360.0) )
+        wind_ts, wind_data, wind_legacy_levels, wind_cfg = WindFromData._load_data(path, start_time)
+        return WindFromData(wind_data, wind_ts, wind_legacy_levels, wind_cfg, integration_time_step / (2.0 * math.pi * 6371008.0 / 360.0) )
 
     def __init__(self, wind_data, wind_ts, wind_legacy_levels, wind_cfg, idlat):
         self.wind_data = wind_data
@@ -293,13 +253,12 @@ class Wind:
 
         return dv, du
     
-    def _tree_flatten(self):
+    def tree_flatten(self):
         children = (self.wind_data, self.wind_ts, self.wind_legacy_levels)  # arrays / dynamic values
         aux_data = {"wind_cfg":self.wind_cfg, "idlat": self.idlat}  # static values
         return (children, aux_data)
     
     @classmethod
-    def _tree_unflatten(cls, aux_data, children):
+    def tree_unflatten(cls, aux_data, children):
         return cls(*children, **aux_data)
 
-tree_util.register_pytree_node(Wind, Wind._tree_flatten, Wind._tree_unflatten)

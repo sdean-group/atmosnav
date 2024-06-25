@@ -1,5 +1,4 @@
 from atmosnav import *
-from atmosnav.wind import Wind
 import atmosnav.trajplot as tplt
 import jax.numpy as jnp
 import jax
@@ -22,7 +21,7 @@ INTEGRATION_TIME_STEP = 60*10
 WAYPOINT_TIME_STEP = 60*60*3
 
 # Load wind data
-wind = Wind.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+wind = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
 
 # Create an agent
 
