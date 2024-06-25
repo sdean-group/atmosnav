@@ -28,7 +28,28 @@ INTEGRATION_TIME_STEP = 60*10
 WAYPOINT_TIME_STEP = 60*60*3
 
 # Load wind data
-wind_inst = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+class NoisyWind(Wind):
+    def __init__(self, wind):
+        self.wind = wind
+
+    def get_direction(self, time: jnp.float32, state: Array) -> tuple[jnp.float32, jnp.float32]:
+        dv, du = self.wind.get_direction(time, state) 
+        dv_noise, du_noise = self.get_noise()
+        return (dv+dv_noise, du+du_noise)
+    
+    def get_noise(self):
+        return (0.05, 0)
+    
+    def tree_flatten(self):
+        return (self.wind, ), {}
+    
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return NoisyWind(*children)
+
+
+
+wind_inst = (WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP))
 
 # Create an agent
 
@@ -130,21 +151,20 @@ def test_plan(horizon_time):
 
 def receeding_horizon_control(start_time, time_elapsed, balloon, wind):
     horizon_time = 60*60*24 # 1 day
-    follow_time = 60*60*12 # 3 hours
-    initial_plan = test_plan(horizon_time)
+    follow_time = 60*60*9 # 3 hours
+    last_plan = test_plan(horizon_time)
 
     logs=[]
 
     time = start_time
     
     while time < start_time + time_elapsed:
-        optimal_plan = get_optimal_plan(time, balloon, initial_plan , wind)
+        optimal_plan = get_optimal_plan(time, balloon, last_plan , wind)
         plan_to_follow = optimal_plan[:follow_time//WAYPOINT_TIME_STEP]
-        # plan_to_follow = optimal_plan
-        next_time, next_balloon, log = trajectory_at(time, balloon, plan_to_follow, wind)
+        next_time, next_balloon, log = trajectory_at(time, balloon, plan_to_follow, NoisyWind(wind))
         next_balloon.controller.start_time += follow_time
         
-        # last_plan = optimal_plan
+        last_plan = np.concatenate((optimal_plan[follow_time//WAYPOINT_TIME_STEP:], test_plan(follow_time)))
         balloon = next_balloon
         time = next_time
 
@@ -154,9 +174,8 @@ def receeding_horizon_control(start_time, time_elapsed, balloon, wind):
 
 ELAPSED_TIME = 60*60*24*3
 
-print("without mpc", START_TIME)
-tplt.plot_on_map(trajectory_at(START_TIME, balloon, get_optimal_plan(START_TIME, balloon, test_plan(ELAPSED_TIME), wind_inst), wind_inst)[-1])
-print(START_TIME)
+print("without mpc")
+tplt.plot_on_map(trajectory_at(START_TIME, balloon, get_optimal_plan(START_TIME, balloon, test_plan(ELAPSED_TIME), wind_inst), NoisyWind(wind_inst))[-1])
 
 print("running mpc")
 logs = receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst)
