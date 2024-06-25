@@ -16,10 +16,10 @@ while True:
 """
 
 # The wind data directory
-DATA_PATH = "../neotraj/data/proc/gfsanl/uv"
+WIND_DATA_PATH = "../neotraj/data/proc/gfsanl/uv"
 
 # initial time (as unix timestamp), must exist within data
-START_TIME = 1691366400
+WIND_DATA_START_TIME = 1691366400
 
 # the numerical integration time step for the balloon 
 INTEGRATION_TIME_STEP = 60*10
@@ -28,7 +28,10 @@ INTEGRATION_TIME_STEP = 60*10
 WAYPOINT_TIME_STEP = 60*60*3
 
 # Load wind data
-wind_inst = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+wind_inst = WindFromData.from_data(
+    WIND_DATA_PATH, 
+    start_time=WIND_DATA_START_TIME, 
+    integration_time_step=INTEGRATION_TIME_STEP)
 
 # Create an agent
 
@@ -42,7 +45,7 @@ def make_weather_balloon(init_lat, init_lon, start_time, waypoint_time_step, int
 SEED = 0 
 balloon = make_weather_balloon(
     42.4410187, -76.4910089, 
-    START_TIME, WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP, 
+    WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP, 
     SEED)
 
 # Plan helper functions
@@ -141,9 +144,8 @@ def receeding_horizon_control(start_time, time_elapsed, balloon, wind):
         optimal_plan = get_optimal_plan(time, balloon, initial_plan , wind)
         plan_to_follow = optimal_plan[:follow_time//WAYPOINT_TIME_STEP]
         # plan_to_follow = optimal_plan
-        next_time, next_balloon, log = trajectory_at(time, balloon, plan_to_follow, wind)
-        next_balloon.controller.start_time += follow_time
-        
+        next_time, next_balloon, log = trajectory_at(balloon, plan_to_follow, wind)
+        wind.start_time += horizon_time
         # last_plan = optimal_plan
         balloon = next_balloon
         time = next_time
@@ -154,9 +156,9 @@ def receeding_horizon_control(start_time, time_elapsed, balloon, wind):
 
 ELAPSED_TIME = 60*60*24*3
 
-print("without mpc", START_TIME)
+print("without mpc")
 tplt.plot_on_map(trajectory_at(START_TIME, balloon, get_optimal_plan(START_TIME, balloon, test_plan(ELAPSED_TIME), wind_inst), wind_inst)[-1])
-print(START_TIME)
+# print(START_TIME)
 
 print("running mpc")
 logs = receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst)

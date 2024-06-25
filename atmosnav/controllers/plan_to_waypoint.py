@@ -8,13 +8,12 @@ def lerp(a, b, t):
 
 class PlanToWaypointController(Controller):
 
-    def __init__(self, start_time, waypoint_time_step):
-        self.start_time = start_time
+    def __init__(self, waypoint_time_step):
         self.waypoint_time_step = waypoint_time_step # this dt is how often a new waypoint happens (e.g. set a waypoint every 3 hours hours)
 
     def action_to_control_input(self, time: jnp.float32, state: Array, action: Array):
-        idx = (time - self.start_time) // self.waypoint_time_step
-        theta = (time - self.start_time - idx * self.waypoint_time_step) / float(self.waypoint_time_step)
+        idx = time // self.waypoint_time_step
+        theta = (time - idx * self.waypoint_time_step) / float(self.waypoint_time_step)
         return lerp(action[idx], action[(idx+1)], theta), self
     
     def tree_flatten(self):

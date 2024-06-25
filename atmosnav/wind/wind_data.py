@@ -80,9 +80,10 @@ class WindFromData(Wind):
         Construct the Wind instance from the data path, start time, and the integration time step.
         """
         wind_ts, wind_data, wind_legacy_levels, wind_cfg = WindFromData._load_data(path, start_time)
-        return WindFromData(wind_data, wind_ts, wind_legacy_levels, wind_cfg, integration_time_step / (2.0 * math.pi * 6371008.0 / 360.0) )
+        return WindFromData(start_time, wind_data, wind_ts, wind_legacy_levels, wind_cfg, integration_time_step / (2.0 * math.pi * 6371008.0 / 360.0) )
 
-    def __init__(self, wind_data, wind_ts, wind_legacy_levels, wind_cfg, idlat):
+    def __init__(self, start_time, wind_data, wind_ts, wind_legacy_levels, wind_cfg, idlat):
+        self.start_time = start_time
         self.wind_data = wind_data
         self.wind_ts = wind_ts
         self.wind_legacy_levels = wind_legacy_levels
@@ -148,6 +149,7 @@ class WindFromData(Wind):
             dv (jnp.float32): The direction along latitude
             du (jnp.float32): The diretcion along longitude
         """
+        time += self.start_time
         file_idx = self.get_index(time)
         file_idx = lax.cond(file_idx == 0, lambda _: 1, lambda idx: idx, operand=file_idx)
         file_idx -= 1
@@ -254,7 +256,7 @@ class WindFromData(Wind):
         return dv, du
     
     def tree_flatten(self):
-        children = (self.wind_data, self.wind_ts, self.wind_legacy_levels)  # arrays / dynamic values
+        children = (self.start_time, self.wind_data, self.wind_ts, self.wind_legacy_levels)  # arrays / dynamic values
         aux_data = {"wind_cfg":self.wind_cfg, "idlat": self.idlat}  # static values
         return (children, aux_data)
     
