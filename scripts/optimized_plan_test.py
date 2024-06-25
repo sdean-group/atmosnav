@@ -6,8 +6,7 @@ import jax
 import numpy as np
 
 """
-TODO: currently compilation of the gradient at function is too slow and needs to be fixed
-Having plan += d_plan / norm(d_plan) slows down the compilation, plan changes
+This script performs trajectory optimization on the original plan.
 """
 
 # The wind data directory
@@ -41,9 +40,9 @@ balloon = make_weather_balloon(
 
 # Create a plan
 WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
-uppers = 10 + jnp.sin(2*np.pi*jnp.arange(WAYPOINT_COUNT)/10)
+uppers = 10 + jnp.sin(2*np.pi*np.arange(WAYPOINT_COUNT)/10)
 lowers = uppers - 3
-plan = jnp.vstack([lowers,uppers]).T
+plan = np.vstack([lowers,uppers]).T
 
 
 
