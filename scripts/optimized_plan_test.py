@@ -7,6 +7,7 @@ import numpy as np
 
 """
 TODO: currently compilation of the gradient at function is too slow and needs to be fixed
+Having plan += d_plan / norm(d_plan) slows down the compilation, plan changes
 """
 
 # The wind data directory
