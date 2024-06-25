@@ -87,27 +87,3 @@ def plot_on_map2(rec, axes=None, reduction=np.mean, day_ticks=False, **kwargs):
                     **kwargs,
                     markeredgecolor="black",
                 )
-
-
-from collections.abc import Iterable
-
-
-
-# comment this back in to support polygon stuff 
-#import alphashape as ap
-#from descartes import PolygonPatch
-
-def plot_alpha_set(pts, ax=None):
-    if ax is None:
-        ax = plt.gca()
-    lons = [p[0] for p in pts]
-    lats = [p[1] for p in pts]
-    # print(len(lons),len(lats))
-    # ax.plot(lons,lats,'*',color='black')
-    α = 1.0
-    while True:
-        shape = ap.alphashape(pts, α)
-        if not isinstance(shape, Iterable):
-            break
-        α /= 2
-    ax.add_patch(PolygonPatch(shape, alpha=0.4))
