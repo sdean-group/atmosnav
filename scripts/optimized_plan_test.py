@@ -99,8 +99,8 @@ def gradient_at(start_time, balloon, plan, wind):
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
     return final_balloon.state[1]
 
-# _, log = run(START_TIME, balloon, plan, wind)
-# tplt.plot_on_map(log)
+_, log = run(START_TIME, balloon, plan, wind)
+tplt.plot_on_map(log)
 
 for i in range(100):
     print(i)
@@ -108,5 +108,5 @@ for i in range(100):
     plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
 
 
-# _, log = run(START_TIME, balloon, plan, wind)
-# tplt.plot_on_map(log)
+_, log = run(START_TIME, balloon, plan, wind)
+tplt.plot_on_map(log)
