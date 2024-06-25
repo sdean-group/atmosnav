@@ -99,22 +99,16 @@ def gradient_at(start_time, balloon, plan, wind):
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
     return final_balloon.state[1]
 
+import time
+
 JIT_LOOP = False
 
 _, log = run(START_TIME, balloon, plan, wind)
 tplt.plot_on_map(log)
 
-
+start = time.time()
 if JIT_LOOP:
 
-    for i in range(100):
-        print(i)
-        d_plan = gradient_at(START_TIME, balloon, plan, wind)
-        plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
-
-
-else:
-        
     @jax.jit
     def optimize_plan(start_time, balloon, plan, wind):
         def inner_opt(i, plan):
@@ -124,6 +118,17 @@ else:
         return jax.lax.fori_loop(0, 1000, inner_opt, init_val=plan)
 
     plan = optimize_plan(START_TIME, balloon, plan, wind)
+    
+else:
+        
+    for i in range(1000):
+        print(i)
+        d_plan = gradient_at(START_TIME, balloon, plan, wind)
+        plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
+
+
+
+print(f'Took: {time.time() - start} s')
 
 _, log = run(START_TIME, balloon, plan, wind)
 tplt.plot_on_map(log)
