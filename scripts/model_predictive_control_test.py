@@ -36,16 +36,16 @@ INTEGRATION_TIME_STEP = 60*10
 WAYPOINT_TIME_STEP = 60*60*3
 
 # Load wind data
-class NoisyWind(Wind):
+class WithDisturbance(Wind):
     def __init__(self, wind):
         self.wind = wind
 
     def get_direction(self, time: jnp.float32, state: Array) -> tuple[jnp.float32, jnp.float32]:
         dv, du = self.wind.get_direction(time, state) 
-        dv_noise, du_noise = self.get_noise()
+        dv_noise, du_noise = self.get_disturbance()
         return (dv+dv_noise, du+du_noise)
     
-    def get_noise(self):
+    def get_disturbance(self):
         return (0.05, 0)
     
     def tree_flatten(self):
@@ -53,11 +53,11 @@ class NoisyWind(Wind):
     
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return NoisyWind(*children)
+        return WithDisturbance(*children)
 
 
 
-wind_inst = (WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP))
+wind_inst = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
 
 # Create an agent
 def make_weather_balloon(init_lat, init_lon, start_time, waypoint_time_step, integration_time_step, seed):
@@ -65,7 +65,7 @@ def make_weather_balloon(init_lat, init_lon, start_time, waypoint_time_step, int
         jnp.array([ init_lat, init_lon, 0.0, 0.0 ]),
         PlanToWaypointController(start_time=start_time, waypoint_time_step=waypoint_time_step),
         SimpleAltitudeModel())
-        #AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
+        # AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
 
 SEED = 0 
 balloon = make_weather_balloon(
@@ -87,9 +87,7 @@ def make_constant_plan(upper, lower, horizon_time):
 
 @jax.jit
 def trajectory_at(start_time, balloon, plan, wind):
-    jax.debug.print("len(plan) is {x}", x=len(plan))
     N = (len(plan)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
-    jax.debug.print("N is {x}", x=N)
     log = {
         't': jnp.zeros((N, ), dtype=jnp.int32),
         'h': jnp.zeros((N, )), 
@@ -140,13 +138,9 @@ def gradient_at(start_time, balloon, plan, wind):
 
 @jax.jit
 def get_optimal_plan(start_time, balloon, plan, wind):
-    # print(start_time)
-    jax.debug.print("{x}", x=start_time)
     def inner_opt(i, stuff):
         time, balloon, plan = stuff
-        # jax.debug.print('optimizing =D')
         d_plan = gradient_at(time, balloon, plan, wind)
-        # jax.debug.print("{x}", x=d_plan)
         return time, balloon, plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
     return jax.lax.fori_loop(0, 200, inner_opt, init_val=(start_time, balloon, plan))[-1]
 
@@ -154,7 +148,7 @@ def test_plan(horizon_time):
     return make_constant_plan(1.0, 3.0, horizon_time)
 
 @partial(jax.jit, static_argnums=(1,)) #changing time_elapsed causes recompilation because array sizes must be known statically
-def receeding_horizon_control(start_time, time_elapsed, balloon, wind):
+def receeding_horizon_control(start_time, time_elapsed, balloon, observed_wind, true_wind):
     horizon_time = 60*60*24 # 1 day
     follow_time = 60*60*9 # 9 hours
 
@@ -171,11 +165,11 @@ def receeding_horizon_control(start_time, time_elapsed, balloon, wind):
         time, balloon, plan, log_idx, logs = val
 
         # Get the optimal plan given the 'observed' wind, but only follow part of it
-        optimal_plan = get_optimal_plan(time, balloon, plan , wind)
+        optimal_plan = get_optimal_plan(time, balloon, plan , observed_wind)
         plan_to_follow = optimal_plan[:follow_time//WAYPOINT_TIME_STEP]
 
         # run the part of the plan to follow in the real wind (the noisy wind)
-        next_time, next_balloon, next_log = trajectory_at(time, balloon, plan_to_follow, NoisyWind(wind))
+        next_time, next_balloon, next_log = trajectory_at(time, balloon, plan_to_follow, true_wind)
         next_balloon.controller.start_time += follow_time # let the balloon know it will run at a different time next iteration
         
         # store the unused part of the plan as an intial guess
@@ -201,7 +195,7 @@ def receeding_horizon_control(start_time, time_elapsed, balloon, wind):
     return jax.lax.fori_loop(0, time_elapsed//follow_time, inner_rhc, (start_time, balloon, test_plan(horizon_time), 0, log))[-1]
 
 # This exists here for reference
-def unjitted_receeding_horizon_control(start_time, time_elapsed, balloon, wind):
+def unjitted_receeding_horizon_control(start_time, time_elapsed, balloon, observed_wind, true_wind):
     horizon_time = 60*60*24 # 1 day
     follow_time = 60*60*9 # 9 hours
     last_plan = test_plan(horizon_time)
@@ -211,9 +205,9 @@ def unjitted_receeding_horizon_control(start_time, time_elapsed, balloon, wind):
     time = start_time
     
     while time < start_time + time_elapsed:
-        optimal_plan = get_optimal_plan(time, balloon, last_plan , wind)
+        optimal_plan = get_optimal_plan(time, balloon, last_plan, observed_wind)
         plan_to_follow = optimal_plan[:follow_time//WAYPOINT_TIME_STEP]
-        next_time, next_balloon, log = trajectory_at(time, balloon, plan_to_follow, NoisyWind(wind))
+        next_time, next_balloon, log = trajectory_at(time, balloon, plan_to_follow, true_wind)
         next_balloon.controller.start_time += follow_time
         
         last_plan = np.concatenate((optimal_plan[follow_time//WAYPOINT_TIME_STEP:], test_plan(follow_time)))
@@ -224,13 +218,14 @@ def unjitted_receeding_horizon_control(start_time, time_elapsed, balloon, wind):
 
 ELAPSED_TIME = 60*60*24*3
 
-# print("without mpc")
-# optimal_plan_no_noise = get_optimal_plan(START_TIME, balloon, test_plan(ELAPSED_TIME), wind_inst)
-# tplt.plot_on_map(trajectory_at(START_TIME, balloon, optimal_plan_no_noise, wind_inst)[-1])
-# # tplt.plot_on_map(trajectory_at(START_TIME, balloon, optimal_plan_no_noise, NoisyWind(wind_inst))[-1])
 
-print("running mpc")
-logs = receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst)
-print("finished, showing plots")
+# Get the optimal plan in the observed wind data, but then run it in the real wind field
+print("Without MPC...")
+optimal_plan_no_noise = get_optimal_plan(START_TIME, balloon, test_plan(ELAPSED_TIME), wind_inst) 
+tplt.plot_on_map(trajectory_at(START_TIME, balloon, optimal_plan_no_noise, WithDisturbance(wind_inst))[-1])
+
+# Runs receeding horizon control
+print("Running MPC...")
+logs = receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, WithDisturbance(wind_inst))
 tplt.plot_on_map(logs)
         
