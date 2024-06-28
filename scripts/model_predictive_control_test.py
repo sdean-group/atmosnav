@@ -134,15 +134,18 @@ def gradient_at(start_time, balloon, plan, wind):
         return next_time, next_balloon
 
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
-    return final_balloon.state[1] # final longitude
+    cost = (final_balloon.state[0] - 40.416775)**2 + (final_balloon.state[1] + 3.703790)**2
+    # cost = (final_balloon.state[0] - 42.4440)**2 + (final_balloon.state[1] + 76.5019)**2
+    # return final_balloon.state[1] # final longitude
+    return cost
 
 @jax.jit
 def get_optimal_plan(start_time, balloon, plan, wind):
     def inner_opt(i, stuff):
         time, balloon, plan = stuff
         d_plan = gradient_at(time, balloon, plan, wind)
-        return time, balloon, plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
-    return jax.lax.fori_loop(0, 200, inner_opt, init_val=(start_time, balloon, plan))[-1]
+        return time, balloon, plan - 0.5 * d_plan / jnp.linalg.norm(d_plan)
+    return jax.lax.fori_loop(0, 100, inner_opt, init_val=(start_time, balloon, plan))[-1]
 
 def test_plan(horizon_time):
     return make_constant_plan(1.0, 3.0, horizon_time)
@@ -150,7 +153,7 @@ def test_plan(horizon_time):
 @partial(jax.jit, static_argnums=(1,)) #changing time_elapsed causes recompilation because array sizes must be known statically
 def receeding_horizon_control(start_time, time_elapsed, balloon, observed_wind, true_wind):
     horizon_time = 60*60*24 # 1 day
-    follow_time = 60*60*9 # 9 hours
+    follow_time = 60*60*12 # 9 hours
 
     N = (time_elapsed//INTEGRATION_TIME_STEP)
     log = {
@@ -216,16 +219,16 @@ def unjitted_receeding_horizon_control(start_time, time_elapsed, balloon, observ
 
     return logs
 
-ELAPSED_TIME = 60*60*24*3
+ELAPSED_TIME = 60*60*24*5
 
 
 # Get the optimal plan in the observed wind data, but then run it in the real wind field
 print("Without MPC...")
 optimal_plan_no_noise = get_optimal_plan(START_TIME, balloon, test_plan(ELAPSED_TIME), wind_inst) 
-tplt.plot_on_map(trajectory_at(START_TIME, balloon, optimal_plan_no_noise, WithDisturbance(wind_inst))[-1])
+tplt.plot_on_map(trajectory_at(START_TIME, balloon, optimal_plan_no_noise, wind_inst)[-1])
 
 # Runs receeding horizon control
 print("Running MPC...")
-logs = receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, WithDisturbance(wind_inst))
+logs = receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, wind_inst)
 tplt.plot_on_map(logs)
         
