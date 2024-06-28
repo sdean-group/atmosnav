@@ -28,8 +28,10 @@ from datetime import datetime
 def plot_altitude(r):
     dates = [datetime.fromtimestamp(t) for t in r['t']] 
     plt.plot(dates, r['h'])
-    plt.plot(dates, r['lbnd'], '--', color='black', alpha=0.5)
-    plt.plot(dates, r['ubnd'], '--', color='black', alpha=0.5)
+    
+    if 'lbnd' in r and 'ubnd' in r:
+        plt.plot(dates, r['lbnd'], '--', color='black', alpha=0.5)
+        plt.plot(dates, r['ubnd'], '--', color='black', alpha=0.5)
     plt.show()
 
 def plot_plan(plan_array):
