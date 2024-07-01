@@ -32,6 +32,12 @@ def plot_altitude(r):
     plt.plot(dates, r['ubnd'], '--', color='black', alpha=0.5)
     plt.show()
 
+def plot_plan(plan_array):
+    t = plan_array.T
+    plt.plot(np.arange(len(plan_array)), t[0], '--', color='black', alpha=0.5)
+    plt.plot(np.arange(len(plan_array)), t[1], '--', color='black', alpha=0.5)
+    plt.show()
+
 def plot_lat_lon(r):
     plt.scatter(r['lon'], r['lat'])
     plt.show()

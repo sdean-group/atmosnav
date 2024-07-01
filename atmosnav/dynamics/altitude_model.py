@@ -7,7 +7,9 @@ import math
 
 class SimpleAltitudeModel(Dynamics):
     def control_input_to_delta_state(self, time: jnp.float32, state: Array, control_input: Array, wind_vector: Array):
-        return jnp.sum(control_input)/2.0, self
+        new_h = jnp.sum(control_input)/2.0
+        return jnp.array([ wind_vector[0], wind_vector[1], new_h - state[2], state[3]]), self
+
 
     def tree_flatten(self):
         return tuple(), {}
