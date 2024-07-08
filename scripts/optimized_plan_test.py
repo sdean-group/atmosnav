@@ -9,7 +9,7 @@ This script performs trajectory optimization on the original plan.
 """
 
 # The wind data directory
-DATA_PATH = "../neotraj/data/proc/gfsanl/uv"
+DATA_PATH = "/Users/bradleyguo/Python Projects/atmosnav/atmosnav/data/proc/gfsanl/uv"
 
 # initial time (as unix timestamp), must exist within data
 START_TIME = 1691366400
@@ -20,8 +20,26 @@ INTEGRATION_TIME_STEP = 60*10
 # The time between waypoint
 WAYPOINT_TIME_STEP = 60*60*3
 
+class GroundWind(Wind):
+    def __init__(self, wind):
+        self.wind = wind
+
+    def get_direction(self, time: jnp.float32, state: Array) -> tuple[jnp.float32, jnp.float32]:
+        dv, du = self.wind.get_direction(time, state) 
+        wind_factor = jnp.absolute((2.0/(1.0+jnp.exp(-200000.0*state[2])) - 1.0))
+        #wind_factor = 1
+        return (dv*wind_factor, du*wind_factor)
+    
+    def tree_flatten(self):
+        return (self.wind, ), {}
+    
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return GroundWind(*children)
+
 # Load wind data
 wind = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+wind = GroundWind(wind)
 
 # Create an agent
 
@@ -113,7 +131,7 @@ if JIT_LOOP:
         def inner_opt(i, plan):
             d_plan = gradient_at(start_time, balloon, plan, wind)
             return plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
-        return jax.lax.fori_loop(0, 1000, inner_opt, init_val=plan)
+        return jax.lax.fori_loop(0, 30000, inner_opt, init_val=plan)
 
     plan = optimize_plan(START_TIME, balloon, plan, wind)
     
