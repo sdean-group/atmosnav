@@ -1,4 +1,4 @@
-from atmosnav import Airborne, AltitudeModel, PlanToWaypointController, WindFromData
+from atmosnav import Airborne, SimpleAltitudeModel, AltitudeModel, PlanToWaypointController, WindFromData
 import atmosnav.trajplot as tplt
 import jax.numpy as jnp
 import jax
@@ -12,7 +12,7 @@ Runs many iterations of the same plan to show that it is fast.
 """
 
 # The wind data directory
-DATA_PATH = "../neotraj/data/proc/gfsanl/uv"
+DATA_PATH = "/Users/bradleyguo/Python Projects/atmosnav/atmosnav/data/proc/gfsanl/uv"
 
 # initial time (as unix timestamp), must exist within data
 START_TIME = 1691366400
@@ -32,7 +32,8 @@ def make_weather_balloon(init_lat, init_lon, start_time, waypoint_time_step, int
     return Airborne(
         jnp.array([ init_lat, init_lon, 0.0, 0.0 ]),
         PlanToWaypointController(start_time=start_time, waypoint_time_step=waypoint_time_step),
-        AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
+        SimpleAltitudeModel())
+        #AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
 
 SEED = 0 
 balloon = make_weather_balloon(

@@ -89,7 +89,7 @@ class WindFromData(Wind):
         self.wind_cfg = wind_cfg
         self.idlat = idlat
     
-    def get_wind(self, f: int, pt, lev: int) -> int:
+    def get_wind(self, f: int, pt, lev: int, wind_factor: float) -> int:
         
         def adjust_pt(pt, num_lons):
             def cond_fun(state):
@@ -116,7 +116,8 @@ class WindFromData(Wind):
         pt = adjust_pt(pt, self.wind_cfg.num_lons)
 
         idx = (self.wind_cfg.num_levels * 2 * (self.wind_cfg.num_lons * pt[0] + pt[1]) + 2 * lev)
-        return jnp.array([0.01* self.wind_data[f][idx], 0.01 * self.wind_data[f][idx + 1]])
+
+        return jnp.array([wind_factor*0.01* self.wind_data[f][idx], wind_factor*0.01 * self.wind_data[f][idx + 1]])
     
     def get_base_neighbor(self, lat: float, lon: float):
         assert -10.0 <= self.wind_cfg.lat_d <= 10.0, f"lat_d out of range: {self.wind_cfg.lat_d}"
@@ -156,6 +157,9 @@ class WindFromData(Wind):
         th = self.wind_ts[file_idx + 1]
        
         h = jnp.clip(state[2], 0, 22)
+
+        # Make sure there is no wind at height 0 
+        wind_factor = jnp.absolute((2.0/(1.0+jnp.exp(-20000.0*h)) - 1.0))
 
         if self.wind_cfg.legacy:
             level_idx = self.get_level(h)
@@ -205,14 +209,14 @@ class WindFromData(Wind):
         θ_h = (h - hl) / (hh - hl)
         
         p = jnp.zeros((2, 2, 2, 2, 2))
-
+        
         
         def body_for_16(i, p):
             i0 = (i >> 0) & 1
             i1 = (i >> 1) & 1
             i2 = (i >> 2) & 1
             i3 = (i >> 3) & 1
-            w = self.get_wind(file_idx + i3, (ilat + i2, ilon + i1), level_idx + sgn * i0)
+            w = self.get_wind(file_idx + i3, (ilat + i2, ilon + i1), level_idx + sgn * i0, wind_factor)
             return p.at[(i3,i2, i1, i0, 0)].set(w[0]).at[(i3,i2, i1, i0, 1)].set(w[1])
 
         p = jax.lax.fori_loop(0, 16, body_for_16, p)

@@ -20,38 +20,22 @@ INTEGRATION_TIME_STEP = 60*10
 # The time between waypoint
 WAYPOINT_TIME_STEP = 60*60*3
 
-class GroundWind(Wind):
-    def __init__(self, wind):
-        self.wind = wind
-
-    def get_direction(self, time: jnp.float32, state: Array) -> tuple[jnp.float32, jnp.float32]:
-        dv, du = self.wind.get_direction(time, state) 
-        wind_factor = jnp.absolute((2.0/(1.0+jnp.exp(-200000.0*state[2])) - 1.0))
-        #wind_factor = 1
-        return (dv*wind_factor, du*wind_factor)
-    
-    def tree_flatten(self):
-        return (self.wind, ), {}
-    
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        return GroundWind(*children)
 
 # Load wind data
 wind = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
-wind = GroundWind(wind)
+
 
 # Create an agent
 
-def make_weather_balloon(init_lat, init_lon, start_time, waypoint_time_step, integration_time_step, seed):
+def make_weather_balloon(init_lat, init_lon, init_height, start_time, waypoint_time_step, integration_time_step, seed):
     return Airborne(
-        jnp.array([ init_lat, init_lon, 0.0, 0.0 ]),
+        jnp.array([ init_lat, init_lon, init_height, 0.0 ]),
         PlanToWaypointController(start_time=start_time, waypoint_time_step=waypoint_time_step),
         AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
 
 SEED = 0 
 balloon = make_weather_balloon(
-    42.4410187, -76.4910089, 
+    42.4410187, -76.4910089, 12.0, 
     START_TIME, WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP, 
     SEED)
 
@@ -114,7 +98,8 @@ def gradient_at(start_time, balloon, plan, wind):
         return next_time, next_balloon
 
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
-    return final_balloon.state[1]
+    #return -final_balloon.state[1]
+    return -((final_balloon.state[0]-42.4410187)**2 + (final_balloon.state[1]+76.4910089)**2 + (final_balloon.state[2])**2) 
 
 import time
 

@@ -24,7 +24,7 @@ while True:
 """
 
 # The wind data directory
-DATA_PATH = "../neotraj/data/proc/gfsanl/uv"
+DATA_PATH = "/Users/bradleyguo/Python Projects/atmosnav/atmosnav/data/proc/gfsanl/uv"
 
 # initial time (as unix timestamp), must exist within data
 START_TIME = 1691366400
@@ -134,7 +134,8 @@ def gradient_at(start_time, balloon, plan, wind):
         return next_time, next_balloon
 
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
-    return final_balloon.state[1] # final longitude
+    #return final_balloon.state[1] # final longitude
+    return -((final_balloon.state[0]-42.4410187)**2 + (final_balloon.state[1]+76.4910089)**2)
 
 @jax.jit
 def get_optimal_plan(start_time, balloon, plan, wind):
