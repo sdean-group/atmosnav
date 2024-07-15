@@ -60,6 +60,23 @@ def plot_on_map(r, filename=None):
     else:
         plt.savefig(filename)
 
+def deterministic_plot_on_map(r, filename=None):
+    dates = [datetime.fromtimestamp(t) for t in r['t']] 
+    plt.figure(figsize=(10,6))
+    ax1 = make_map_axis(ncol=2, nrow=1, pos=1) #oops, ncol and nrows are flipped here
+    ax1.plot(r['lon'],r['lat'])
+    ax2 = plt.subplot(2,1,2)
+
+    ax2.plot(dates, r['h'])
+    ax2.plot(dates, r['plan'], '--', color='black', alpha=0.5)
+
+    ax2.grid()
+    ax2.set_ylabel('Altitude (km)')
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
+
 
 def set_map_axis(polar=False):
     ax = make_map_axis(polar)

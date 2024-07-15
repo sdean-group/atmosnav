@@ -18,6 +18,30 @@ class SimpleAltitudeModel(Dynamics):
     def tree_unflatten(cls, aux_data, children):
         return SimpleAltitudeModel()
 
+class DeterministicAltitudeModel(Dynamics):
+
+    def __init__(self, integration_time_step):
+        self.dt = integration_time_step
+        self.vlim = 1.7
+
+    def control_input_to_delta_state(self, time: jnp.float32, state: Array, control_input: Array, wind_vector: Array):
+        h = self.update(state, control_input[0])
+        return jnp.array([ wind_vector[0], wind_vector[1], h - state[2], 0.0]), self
+    
+    def update(self, state, waypoint):
+        return lax.cond(jnp.abs(waypoint-state[2]) > self.vlim / 3600.0 * self.dt,
+                        lambda op: op[0][2] + self.vlim / 3600.0 * self.dt * jnp.sign(op[1]-op[0][2]),
+                        lambda op: op[1],
+                        operand = (state, waypoint))
+
+    def tree_flatten(self):
+        children = ()  # arrays / dynamic values
+        aux_data = {'dt':self.dt, 'vlim':self.vlim}  # static values
+        return (children, aux_data)
+    
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return DeterministicAltitudeModel(aux_data['dt'])
 
 SinApproxT = 10 * 60
 

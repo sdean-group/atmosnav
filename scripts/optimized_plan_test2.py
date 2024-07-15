@@ -20,6 +20,20 @@ INTEGRATION_TIME_STEP = 60*10
 # The time between waypoint
 WAYPOINT_TIME_STEP = 60*60*3
 
+# Start and end
+start = (42.4410187, -76.4910089, 12)
+#destination = (42.4410187, -76.4910089, 0) #Ithaca
+#destination = (40.4168, -3.7038, 0) #Madrid
+#destination = (64.1470, -21.9408, 0) #Reykjavik
+destination = (44.3876, -68.2039, 0) #Bar Harbor
+
+
+# Create a plan
+WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
+# uppers = 10 + jnp.sin(2*np.pi*np.arange(WAYPOINT_COUNT)/10)
+# lowers = uppers - 3
+# plan = np.vstack([lowers,uppers]).T
+plan = 10*np.ones((WAYPOINT_COUNT, 1))
 
 # Load wind data
 wind = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
@@ -36,17 +50,9 @@ def make_weather_balloon(init_lat, init_lon, init_height, start_time, waypoint_t
 
 SEED = 0 
 balloon = make_weather_balloon(
-    42.4410187, -76.4910089, 12.0, 
+    start[0], start[1], start[2], 
     START_TIME, WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP, 
     SEED)
-
-# Create a plan
-WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
-# uppers = 10 + jnp.sin(2*np.pi*np.arange(WAYPOINT_COUNT)/10)
-# lowers = uppers - 3
-# plan = np.vstack([lowers,uppers]).T
-plan = 0*np.ones((WAYPOINT_COUNT, 1))
-
 
 
 @jax.jit
@@ -85,25 +91,28 @@ def run(start_time, balloon, plan, wind):
     return jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon, log))[1:]
 
 
-destination = (40.4168, 3.7038)
+
+discount = 0.99
 from functools import partial 
 @jax.jit
 @partial(jax.grad, argnums=2)
 def gradient_at(start_time, balloon, plan, wind):
     N = (len(plan)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
-    def inner_run(i, time_balloon):
-        time, balloon = time_balloon
+    def inner_run(i, time_balloon_cost):
+        time, balloon, cost = time_balloon_cost
+        cost += -discount**(N-1-i)*((balloon.state[0]-destination[0])**2 + (balloon.state[1]-destination[1])**2 + (balloon.state[2]-destination[2])**2) 
         # step the agent in time
         next_balloon, _ =balloon.step(time, plan, wind.get_direction(time, balloon.state))
 
         # jump dt
-        next_time = time + INTEGRATION_TIME_STEP
+        next_time = time + INTEGRATION_TIME_STEP    
 
-        return next_time, next_balloon
+        return next_time, next_balloon, cost
 
-    final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
+    final_time, final_balloon, cost = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon, 0))
     #return -final_balloon.state[1]
-    return -((final_balloon.state[0]-destination[0])**2 + (final_balloon.state[1]+destination[1])**2 + (final_balloon.state[2])**2) 
+    #return -((final_balloon.state[0]-destination[0])**2 + (final_balloon.state[1]-destination[1])**2 + (final_balloon.state[2])**2) 
+    return cost
 
 import time
 
@@ -120,7 +129,7 @@ if JIT_LOOP:
     def optimize_plan(start_time, balloon, plan, wind):
         def inner_opt(i, plan):
             d_plan = gradient_at(start_time, balloon, plan, wind)
-            return plan + 2 * d_plan / jnp.linalg.norm(d_plan)
+            return plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
         return jax.lax.fori_loop(0, 10000, inner_opt, init_val=plan)
 
     plan = optimize_plan(START_TIME, balloon, plan, wind)
