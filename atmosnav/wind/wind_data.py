@@ -57,10 +57,8 @@ class WindFromData(Wind):
         wcfg.lon_d = cfg["LON_D"]
         wind_cfg = wcfg
 
-        print('start loading')
         wind_ts = jnp.load(os.path.join(dname, "wind_ts.npy"), mmap_mode='r')
         wind_data = jnp.load(os.path.join(dname, "wind_data.npy"), mmap_mode = 'r')
-        print('done loading')
         
         return wind_ts, wind_data, wind_legacy_levels, wind_cfg
 
