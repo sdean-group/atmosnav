@@ -90,14 +90,12 @@ class WindFromData(Wind):
 
     def get_index(self, t: int) -> int:
         assert len(self.wind_ts) != 0, "wind_ts should not be length 0, data is not loaded properly"
-        return bisect_left_jax(self.wind_ts, t)
+        return jnp.searchsorted(self.wind_ts, t)
 
+    @profile
     def get_level(self, altitude: float) -> int:
-        if self.wind_cfg.legacy:
-            p = alt2p(altitude)
-            return bisect_left_jax(self.wind_legacy_levels, p)
-        else:
-            return int((altitude - self.wind_cfg.alt_min) / self.wind_cfg.alt_d)
+        p = alt2p(altitude)
+        return jnp.searchsorted(self.wind_legacy_levels, p)
 
     def get_direction(self, time, state):
         """
