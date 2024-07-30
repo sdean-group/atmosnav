@@ -24,7 +24,7 @@ INTEGRATION_TIME_STEP = 60*10
 WAYPOINT_TIME_STEP = 60*60*3
 
 # Load wind data
-wind = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+wind = WindFromData.from_data(DATA_PATH, INTEGRATION_TIME_STEP)
 
 # Create an agent
 
@@ -81,6 +81,5 @@ def run(start_time, balloon, plan, wind):
 
 
 for i in range(100):
-    print(i)
     _, log = run(START_TIME, balloon, plan, wind)
 tplt.plot_on_map(log)
