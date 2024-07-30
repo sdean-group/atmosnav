@@ -78,33 +78,8 @@ class WindFromData(Wind):
         self.idlat = idlat
     
     def get_wind(self, f: int, pt, lev: int) -> int:
-        
-        def adjust_pt(pt, num_lons):
-            def cond_fun(state):
-                pt, _ = state
-                return (pt[1] >= num_lons) | (pt[1] < 0)
-
-            def body_fun(state):
-                pt, _ = state
-                pt = jax.lax.cond(pt[1] >= num_lons,
-                                lambda x: (x[0], x[1] - num_lons),
-                                lambda x: x,
-                                pt)
-                pt = jax.lax.cond(pt[1] < 0,
-                                lambda x: (x[0], x[1] + num_lons),
-                                lambda x: x,
-                                pt)
-                return (pt, None)
-
-            state = (pt, None)
-            state = jax.lax.while_loop(cond_fun, body_fun, state)
-            pt, _ = state
-            return pt
-
-        pt = adjust_pt(pt, self.wind_cfg.num_lons)
-
-        idx = (self.wind_cfg.num_levels * 2 * (self.wind_cfg.num_lons * pt[0] + pt[1]) + 2 * lev)
-        return jnp.array([0.01* self.wind_data[f][idx], 0.01 * self.wind_data[f][idx + 1]])
+        idx = (self.wind_cfg.num_levels * 2 * (self.wind_cfg.num_lons * pt[0] + (pt[1] % self.wind_cfg.num_lons)) + 2 * lev)
+        return 0.01 * jax.lax.dynamic_slice(self.wind_data, (f, idx), (1, 2))[0]
     
     def get_base_neighbor(self, lat: float, lon: float):
         assert -10.0 <= self.wind_cfg.lat_d <= 10.0, f"lat_d out of range: {self.wind_cfg.lat_d}"
