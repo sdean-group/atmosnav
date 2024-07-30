@@ -47,7 +47,7 @@ balloon = make_weather_balloon(
 
 @jax.jit
 def run(start_time, balloon, plan, wind):
-    N = len(plan)*WAYPOINT_TIME_STEP//INTEGRATION_TIME_STEP
+    N = (len(plan)-1)*WAYPOINT_TIME_STEP//INTEGRATION_TIME_STEP
     log = {
         't': jnp.zeros((N, ), dtype=jnp.int32),
         'h': jnp.zeros((N, )), 
