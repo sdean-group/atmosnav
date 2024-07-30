@@ -29,20 +29,14 @@ def make_weather_balloon(init_lat, init_lon, start_time, waypoint_time_step, int
     return Airborne(
         jnp.array([ init_lat, init_lon, 0.0, 0.0 ]),
         PlanToWaypointController(start_time=start_time, waypoint_time_step=waypoint_time_step),
-        AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
+        SimpleAltitudeModel())
+        # AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
 
 SEED = 0 
 balloon = make_weather_balloon(
     42.4410187, -76.4910089, 
     START_TIME, WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP, 
     SEED)
-
-# Create a plan
-WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
-uppers = 10 + jnp.sin(2*np.pi*np.arange(WAYPOINT_COUNT)/10)
-lowers = uppers - 3
-plan = np.vstack([lowers,uppers]).T
-
 
 
 @jax.jit
@@ -84,7 +78,9 @@ from functools import partial
 @jax.jit
 @partial(jax.grad, argnums=2)
 def gradient_at(start_time, balloon, plan, wind):
-    N = (len(plan)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
+    # jax.debug.print("{start_time}, {balloon}, {plan}, {wind}", start_time=start_time, balloon=balloon, plan=plan, wind=wind)
+    N = ((len(plan)-1)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
+    jax.debug.print("LOOP ITERS {x}", x=N)
     def inner_run(i, time_balloon):
         time, balloon = time_balloon
         # step the agent in time
@@ -92,18 +88,26 @@ def gradient_at(start_time, balloon, plan, wind):
 
         # jump dt
         next_time = time + INTEGRATION_TIME_STEP
-
+        jax.debug.print("{x}, {y}", x=next_time, y=next_balloon)
         return next_time, next_balloon
 
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
+    jax.debug.print("{x}", x=final_balloon.state[1])
     return final_balloon.state[1]
 
 import time
 
+# Create a plan
+WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
+uppers = 10 + jnp.sin(2*np.pi*np.arange(WAYPOINT_COUNT)/10)
+lowers = uppers - 3
+plan = np.vstack([lowers,uppers]).T
+
+
 JIT_LOOP = False
 
-_, log = run(START_TIME, balloon, plan, wind_inst)
-tplt.plot_on_map(log)
+# _, log = run(START_TIME, balloon, plan, wind_inst)
+# tplt.plot_on_map(log)
 
 start = time.time()
 if JIT_LOOP:
@@ -119,7 +123,8 @@ if JIT_LOOP:
     
 else:
         
-    for i in range(10):
+    for i in range(1):
+        print(START_TIME, balloon, plan, wind_inst)
         d_plan = gradient_at(START_TIME, balloon, plan, wind_inst)
         print(d_plan)
         plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
@@ -128,5 +133,5 @@ else:
 
 print(f'Took: {time.time() - start} s')
 
-_, log = run(START_TIME, balloon, plan, wind_inst)
-tplt.plot_on_map(log)
+# _, log = run(START_TIME, balloon, plan, wind_inst)
+# tplt.plot_on_map(log)
