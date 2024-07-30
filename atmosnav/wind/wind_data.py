@@ -118,31 +118,26 @@ class WindFromData(Wind):
        
         h = jnp.clip(state[2], 0, 22)
 
-        if self.wind_cfg.legacy:
-            level_idx = self.get_level(h)
-            
-            level_idx = jax.lax.cond(
-                level_idx == self.wind_cfg.num_levels,
-                lambda _: self.wind_cfg.num_levels - 1,
-                lambda _: level_idx,
-                operand=None
-            )
-            
-            h = jax.lax.cond(
-                level_idx == self.wind_cfg.num_levels - 1,
-                lambda idx: 1.0 * p2alt(self.wind_legacy_levels[idx]),
-                lambda _: 1.0 * h,
-                operand=level_idx
-            )
+        level_idx = self.get_level(h)
+        
+        level_idx = jax.lax.cond(
+            level_idx == self.wind_cfg.num_levels,
+            lambda _: self.wind_cfg.num_levels - 1,
+            lambda _: level_idx,
+            operand=None
+        )
+        
+        h = jax.lax.cond(
+            level_idx == self.wind_cfg.num_levels - 1,
+            lambda idx: 1.0 * p2alt(self.wind_legacy_levels[idx]),
+            lambda _: 1.0 * h,
+            operand=level_idx
+        )
 
-            hh = p2alt(self.wind_legacy_levels[level_idx - 1])
-            hl = p2alt(self.wind_legacy_levels[level_idx])
-            sgn = -1
-        else:
-            level_idx = self.get_level(h)
-            hl = self.wind_cfg.alt_d * level_idx
-            hh = self.wind_cfg.alt_d * (level_idx + 1)
-            sgn = 1
+        hh = p2alt(self.wind_legacy_levels[level_idx - 1])
+        hl = p2alt(self.wind_legacy_levels[level_idx])
+        sgn = -1
+        
 
         vlat = state[0]
         vlon = state[1]
