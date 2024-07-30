@@ -12,7 +12,7 @@ Runs many iterations of the same plan to show that it is fast.
 """
 
 # The wind data directory
-DATA_PATH = "../neotraj/data/proc/gfsanl/uv"
+DATA_PATH = "../data/small"
 
 # initial time (as unix timestamp), must exist within data
 START_TIME = 1691366400
