@@ -9,7 +9,7 @@ This script performs trajectory optimization on the original plan.
 """
 
 # The wind data directory
-DATA_PATH = "../neotraj/data/proc/gfsanl/uv"
+DATA_PATH = "../data/small"
 
 # initial time (as unix timestamp), must exist within data
 START_TIME = 1691366400
@@ -21,7 +21,7 @@ INTEGRATION_TIME_STEP = 60*10
 WAYPOINT_TIME_STEP = 60*60*3
 
 # Load wind data
-wind = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+wind_inst = WindFromData.from_data(DATA_PATH, integration_time_step=INTEGRATION_TIME_STEP)
 
 # Create an agent
 
@@ -100,9 +100,9 @@ def gradient_at(start_time, balloon, plan, wind):
 
 import time
 
-JIT_LOOP = True
+JIT_LOOP = False
 
-_, log = run(START_TIME, balloon, plan, wind)
+_, log = run(START_TIME, balloon, plan, wind_inst)
 tplt.plot_on_map(log)
 
 start = time.time()
@@ -115,17 +115,18 @@ if JIT_LOOP:
             return plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
         return jax.lax.fori_loop(0, 1000, inner_opt, init_val=plan)
 
-    plan = optimize_plan(START_TIME, balloon, plan, wind)
+    plan = optimize_plan(START_TIME, balloon, plan, wind_inst)
     
 else:
         
-    for i in range(1000):
-        d_plan = gradient_at(START_TIME, balloon, plan, wind)
+    for i in range(10):
+        d_plan = gradient_at(START_TIME, balloon, plan, wind_inst)
+        print(d_plan)
         plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
 
 
 
 print(f'Took: {time.time() - start} s')
 
-_, log = run(START_TIME, balloon, plan, wind)
+_, log = run(START_TIME, balloon, plan, wind_inst)
 tplt.plot_on_map(log)

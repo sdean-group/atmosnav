@@ -24,7 +24,7 @@ while True:
 """
 
 # The wind data directory
-DATA_PATH = "../neotraj/data/proc/gfsanl/uv"
+DATA_PATH = "../data/small"
 
 # initial time (as unix timestamp), must exist within data
 START_TIME = 1691366400
@@ -57,7 +57,7 @@ class WithDisturbance(Wind):
 
 
 
-wind_inst = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+wind_inst = WindFromData.from_data(DATA_PATH, INTEGRATION_TIME_STEP)
 
 # Create an agent
 def make_weather_balloon(init_lat, init_lon, start_time, waypoint_time_step, integration_time_step, seed):
@@ -87,7 +87,7 @@ def make_constant_plan(upper, lower, horizon_time):
 
 @jax.jit
 def trajectory_at(start_time, balloon, plan, wind):
-    N = (len(plan)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
+    N = ((len(plan) - 1)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
     log = {
         't': jnp.zeros((N, ), dtype=jnp.int32),
         'h': jnp.zeros((N, )), 
@@ -100,8 +100,11 @@ def trajectory_at(start_time, balloon, plan, wind):
         time, balloon, log = time_and_balloon_and_log
 
         # step the agent in time
+        jax.debug.print("{time}, {plan}, {dire}", time=time, plan=plan, dire=wind.get_direction(time, balloon.state))
         next_balloon, info = balloon.step(time, plan, wind.get_direction(time, balloon.state))
         
+        jax.debug.print("{x}", x=info)
+
         # update the log
         next_log = {
             't':log['t'].at[i].set(time.astype(int)),
@@ -141,6 +144,7 @@ def get_optimal_plan(start_time, balloon, plan, wind):
     def inner_opt(i, stuff):
         time, balloon, plan = stuff
         d_plan = gradient_at(time, balloon, plan, wind)
+        # jax.debug.print("{x}", x=d_plan)
         return time, balloon, plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
     return jax.lax.fori_loop(0, 200, inner_opt, init_val=(start_time, balloon, plan))[-1]
 
@@ -222,10 +226,12 @@ ELAPSED_TIME = 60*60*24*3
 # Get the optimal plan in the observed wind data, but then run it in the real wind field
 print("Without MPC...")
 optimal_plan_no_noise = get_optimal_plan(START_TIME, balloon, test_plan(ELAPSED_TIME), wind_inst) 
-tplt.plot_on_map(trajectory_at(START_TIME, balloon, optimal_plan_no_noise, WithDisturbance(wind_inst))[-1])
+print(optimal_plan_no_noise)
+# trajectory_at(START_TIME, balloon, optimal_plan_no_noise, wind_inst)[-1]
+# tplt.plot_on_map(trajectory_at(START_TIME, balloon, optimal_plan_no_noise, wind_inst)[-1])
 
-# Runs receeding horizon control
-print("Running MPC...")
-logs = receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, WithDisturbance(wind_inst))
-tplt.plot_on_map(logs)
+# # Runs receeding horizon control
+# print("Running MPC...")
+# logs = receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, wind_inst)
+# tplt.plot_on_map(logs)
         
