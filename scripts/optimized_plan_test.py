@@ -29,8 +29,7 @@ def make_weather_balloon(init_lat, init_lon, start_time, waypoint_time_step, int
     return Airborne(
         jnp.array([ init_lat, init_lon, 0.0, 0.0 ]),
         PlanToWaypointController(start_time=start_time, waypoint_time_step=waypoint_time_step),
-        SimpleAltitudeModel())
-        # AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
+        AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
 
 SEED = 0 
 balloon = make_weather_balloon(
@@ -80,7 +79,6 @@ from functools import partial
 def gradient_at(start_time, balloon, plan, wind):
     # jax.debug.print("{start_time}, {balloon}, {plan}, {wind}", start_time=start_time, balloon=balloon, plan=plan, wind=wind)
     N = ((len(plan)-1)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
-    jax.debug.print("LOOP ITERS {x}", x=N)
     def inner_run(i, time_balloon):
         time, balloon = time_balloon
         # step the agent in time
@@ -88,11 +86,9 @@ def gradient_at(start_time, balloon, plan, wind):
 
         # jump dt
         next_time = time + INTEGRATION_TIME_STEP
-        jax.debug.print("{x}, {y}", x=next_time, y=next_balloon)
         return next_time, next_balloon
 
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
-    jax.debug.print("{x}", x=final_balloon.state[1])
     return final_balloon.state[1]
 
 import time
@@ -106,8 +102,8 @@ plan = np.vstack([lowers,uppers]).T
 
 JIT_LOOP = False
 
-# _, log = run(START_TIME, balloon, plan, wind_inst)
-# tplt.plot_on_map(log)
+_, log = run(START_TIME, balloon, plan, wind_inst)
+tplt.plot_on_map(log)
 
 start = time.time()
 if JIT_LOOP:
@@ -123,15 +119,13 @@ if JIT_LOOP:
     
 else:
         
-    for i in range(1):
-        print(START_TIME, balloon, plan, wind_inst)
+    for i in range(1000):
         d_plan = gradient_at(START_TIME, balloon, plan, wind_inst)
-        print(d_plan)
         plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
 
 
 
 print(f'Took: {time.time() - start} s')
 
-# _, log = run(START_TIME, balloon, plan, wind_inst)
-# tplt.plot_on_map(log)
+_, log = run(START_TIME, balloon, plan, wind_inst)
+tplt.plot_on_map(log)

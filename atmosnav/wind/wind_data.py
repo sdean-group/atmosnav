@@ -77,10 +77,34 @@ class WindFromData(Wind):
         self.wind_cfg = wind_cfg
         self.idlat = idlat
     
-    @profile
     def get_wind(self, f: int, pt, lev: int) -> int:
-        idx = (self.wind_cfg.num_levels * 2 * (self.wind_cfg.num_lons * pt[0] + (pt[1] % self.wind_cfg.num_lons)) + 2 * lev)
-        return 0.01 * jax.lax.dynamic_slice(self.wind_data, (f, idx), (1, 2))[0]
+        
+        def adjust_pt(pt, num_lons):
+            def cond_fun(state):
+                pt, _ = state
+                return (pt[1] >= num_lons) | (pt[1] < 0)
+
+            def body_fun(state):
+                pt, _ = state
+                pt = jax.lax.cond(pt[1] >= num_lons,
+                                lambda x: (x[0], x[1] - num_lons),
+                                lambda x: x,
+                                pt)
+                pt = jax.lax.cond(pt[1] < 0,
+                                lambda x: (x[0], x[1] + num_lons),
+                                lambda x: x,
+                                pt)
+                return (pt, None)
+
+            state = (pt, None)
+            state = jax.lax.while_loop(cond_fun, body_fun, state)
+            pt, _ = state
+            return pt
+
+        pt = adjust_pt(pt, self.wind_cfg.num_lons)
+
+        idx = (self.wind_cfg.num_levels * 2 * (self.wind_cfg.num_lons * pt[0] + pt[1]) + 2 * lev)
+        return jnp.array([0.01* self.wind_data[f][idx], 0.01 * self.wind_data[f][idx + 1]])
     
     def get_base_neighbor(self, lat: float, lon: float):
         assert -10.0 <= self.wind_cfg.lat_d <= 10.0, f"lat_d out of range: {self.wind_cfg.lat_d}"
@@ -88,19 +112,30 @@ class WindFromData(Wind):
         lat0 = ((lat - self.wind_cfg.lat_min) // self.wind_cfg.lat_d).astype(int)
         lon0 = ((lon - self.wind_cfg.lon_min) // self.wind_cfg.lon_d).astype(int)
         return lat0, lon0
-    
-    @profile
+
     def get_index(self, t: int) -> int:
         assert len(self.wind_ts) != 0, "wind_ts should not be length 0, data is not loaded properly"
-        return jnp.searchsorted(self.wind_ts, t)
+        return bisect_left_jax(self.wind_ts, t)
 
-    @profile
     def get_level(self, altitude: float) -> int:
-        p = alt2p(altitude)
-        return jnp.searchsorted(self.wind_legacy_levels, p)
-    
-    @profile
+        if self.wind_cfg.legacy:
+            p = alt2p(altitude)
+            return bisect_left_jax(self.wind_legacy_levels, p)
+        else:
+            return int((altitude - self.wind_cfg.alt_min) / self.wind_cfg.alt_d)
+
     def get_direction(self, time, state):
+        """
+        Gets the direction of the wind movement at the state and a given time.
+
+        Args:
+            time (jnp.float32): The time now since the simulation has started
+            state (jnp.Array): The state vector, composed of [lat, lon, h]
+        
+        Returns:
+            dv (jnp.float32): The direction along latitude
+            du (jnp.float32): The diretcion along longitude
+        """
         file_idx = self.get_index(time)
         file_idx = lax.cond(file_idx == 0, lambda _: 1, lambda idx: idx, operand=file_idx)
         file_idx -= 1
@@ -110,26 +145,31 @@ class WindFromData(Wind):
        
         h = jnp.clip(state[2], 0, 22)
 
-        level_idx = self.get_level(h)
-        
-        level_idx = jax.lax.cond(
-            level_idx == self.wind_cfg.num_levels,
-            lambda _: self.wind_cfg.num_levels - 1,
-            lambda _: level_idx,
-            operand=None
-        )
-        
-        h = jax.lax.cond(
-            level_idx == self.wind_cfg.num_levels - 1,
-            lambda idx: 1.0 * p2alt(self.wind_legacy_levels[idx]),
-            lambda _: 1.0 * h,
-            operand=level_idx
-        )
+        if self.wind_cfg.legacy:
+            level_idx = self.get_level(h)
+            
+            level_idx = jax.lax.cond(
+                level_idx == self.wind_cfg.num_levels,
+                lambda _: self.wind_cfg.num_levels - 1,
+                lambda _: level_idx,
+                operand=None
+            )
+            
+            h = jax.lax.cond(
+                level_idx == self.wind_cfg.num_levels - 1,
+                lambda idx: 1.0 * p2alt(self.wind_legacy_levels[idx]),
+                lambda _: 1.0 * h,
+                operand=level_idx
+            )
 
-        hh = p2alt(self.wind_legacy_levels[level_idx - 1])
-        hl = p2alt(self.wind_legacy_levels[level_idx])
-        sgn = -1
-
+            hh = p2alt(self.wind_legacy_levels[level_idx - 1])
+            hl = p2alt(self.wind_legacy_levels[level_idx])
+            sgn = -1
+        else:
+            level_idx = self.get_level(h)
+            hl = self.wind_cfg.alt_d * level_idx
+            hh = self.wind_cfg.alt_d * (level_idx + 1)
+            sgn = 1
 
         vlat = state[0]
         vlon = state[1]
@@ -152,13 +192,49 @@ class WindFromData(Wind):
         θ_t = (time - tl) / (th - tl)
         θ_h = (h - hl) / (hh - hl)
         
-        v0 = jnp.array([[[[self.get_wind(file_idx + 0, (ilat + 0, ilon + 0), level_idx + sgn * 0), self.get_wind(file_idx + 0, (ilat + 0, ilon + 0), level_idx + sgn * 1)], [self.get_wind(file_idx + 0, (ilat + 0, ilon + 1), level_idx + sgn * 0), self.get_wind(file_idx + 0, (ilat + 0, ilon + 1), level_idx + sgn * 1)]], [[self.get_wind(file_idx + 0, (ilat + 1, ilon + 0), level_idx + sgn * 0), self.get_wind(file_idx + 0, (ilat + 1, ilon + 0), level_idx + sgn * 1)], [self.get_wind(file_idx + 0, (ilat + 1, ilon + 1), level_idx + sgn * 0), self.get_wind(file_idx + 0, (ilat + 1, ilon + 1), level_idx + sgn * 1)]]], [[[self.get_wind(file_idx + 1, (ilat + 0, ilon + 0), level_idx + sgn * 0), self.get_wind(file_idx + 1, (ilat + 0, ilon + 0), level_idx + sgn * 1)], [self.get_wind(file_idx + 1, (ilat + 0, ilon + 1), level_idx + sgn * 0), self.get_wind(file_idx + 1, (ilat + 0, ilon + 1), level_idx + sgn * 1)]], [[self.get_wind(file_idx + 1, (ilat + 1, ilon + 0), level_idx + sgn * 0), self.get_wind(file_idx + 1, (ilat + 1, ilon + 0), level_idx + sgn * 1)], [self.get_wind(file_idx + 1, (ilat + 1, ilon + 1), level_idx + sgn * 0), self.get_wind(file_idx + 1, (ilat + 1, ilon + 1), level_idx + sgn * 1)]]]])
-        v1 = v0[:, :, :, 0] * (1 - θ_h) + v0[:, :, :, 1] * θ_h
-        v2 = v1[:, :, 0] * (1 - θ_lon) + v1[:, :, 1] * θ_lon
-        v3 = v2[:, 0] * (1 - θ_lat) + v2[:, 1] * θ_lat
-        v4 = v3[0] * (1 - θ_t) + v3[1] * θ_t
-        u, v = v4
+        p = jnp.zeros((2, 2, 2, 2, 2))
+
+        
+        def body_for_16(i, p):
+            i0 = (i >> 0) & 1
+            i1 = (i >> 1) & 1
+            i2 = (i >> 2) & 1
+            i3 = (i >> 3) & 1
+            w = self.get_wind(file_idx + i3, (ilat + i2, ilon + i1), level_idx + sgn * i0)
+            return p.at[(i3,i2, i1, i0, 0)].set(w[0]).at[(i3,i2, i1, i0, 1)].set(w[1])
+
+        p = jax.lax.fori_loop(0, 16, body_for_16, p)
+
+        def body_for_8(i, p):
+            i1 = (i >> 0) & 1
+            i2 = (i >> 1) & 1
+            i3 = (i >> 2) & 1
+            p = p.at[(i3, i2, i1, 0, 0)].set(p[i3][i2][i1][0][0] * (1 - θ_h) + p[i3][i2][i1][1][0] * θ_h)
+            return p.at[(i3, i2, i1, 0, 1)].set(p[i3][i2][i1][0][1] * (1 - θ_h) + p[i3][i2][i1][1][1] * θ_h)
+
+        p = jax.lax.fori_loop(0, 8, body_for_8, p)
+        
+        def body_for_4(i, p):
+            i2 = (i >> 0) & 1
+            i3 = (i >> 1) & 1
+            p = p.at[(i3, i2, 0, 0, 0)].set(p[i3][i2][0][0][0] * (1 - θ_lon) + p[i3][i2][1][0][0] * θ_lon)
+            return p.at[(i3, i2, 0, 0, 1)].set(p[i3][i2][0][0][1] * (1 - θ_lon) + p[i3][i2][1][0][1] * θ_lon)
+
+        p = jax.lax.fori_loop(0, 4, body_for_4, p)
+
+        def body_for_2(i, p):
+            i3 = (i >> 0) & 1
+            return p.at[(i3,0,0,0,0)].set(p[i3][0][0][0][0] * (1 - θ_lat) + p[i3][1][0][0][0] * θ_lat)\
+                .at[(i3,0,0,0,1)].set( p[i3][0][0][0][1] * (1 - θ_lat) + p[i3][1][0][0][1] * θ_lat)
+        
+        p = jax.lax.fori_loop(0, 2, body_for_2, p)
+
+        p = p.at[(0,0,0,0,0)].set(p[0][0][0][0][0] * (1 - θ_t) + p[1][0][0][0][0] * θ_t)\
+            .at[(0,0,0,0,1)].set(p[0][0][0][0][1] * (1 - θ_t) + p[1][0][0][0][1] * θ_t)
     
+        u = p[0][0][0][0][0]
+        v = p[0][0][0][0][1]
+
         dv = v * self.idlat
         du = u * (self.idlat / jnp.cos((state[0] + dv * 0.5) * (math.pi / 180.0)))
         du = jnp.min(jnp.array([jnp.max(jnp.array([du, -120]), axis=None), 120]), axis=None)
@@ -173,3 +249,4 @@ class WindFromData(Wind):
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children, **aux_data)
+
