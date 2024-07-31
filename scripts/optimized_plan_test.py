@@ -93,6 +93,13 @@ def cost_at(start_time, balloon, plan, wind):
 
 gradient_at = jax.jit(jax.grad(cost_at, argnums=2))
 
+@jax.jit
+def optimize_plan(start_time, balloon, plan, wind, steps):
+    def inner_opt(i, plan):
+        d_plan = gradient_at(start_time, balloon, plan, wind)
+        return plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
+    return jax.lax.fori_loop(0, steps, inner_opt, init_val=plan)
+
 import time
 
 # Create a plan
@@ -102,7 +109,7 @@ lowers = uppers - 3
 plan = np.vstack([lowers,uppers]).T
 
 
-JIT_LOOP = False
+JIT_LOOP = True
 
 _, log = run(START_TIME, balloon, plan, wind_inst)
 tplt.plot_on_map(log)
@@ -110,22 +117,21 @@ tplt.plot_on_map(log)
 
 print('Compiling code... ', end='')
 start = time.time()
-ignore = gradient_at(START_TIME, balloon, plan, wind_inst)
+
+if JIT_LOOP:
+    ignore = optimize_plan(START_TIME, balloon, plan, wind_inst, 1)
+else:
+    ignore = gradient_at(START_TIME, balloon, plan, wind_inst)
 print(f'Took {time.time() - start}s')
+
+    
 
 N = 1000
 print(f'Running {N} steps of optimization...', end='')
 start = time.time()
 if JIT_LOOP:
 
-    @jax.jit
-    def optimize_plan(start_time, balloon, plan, wind):
-        def inner_opt(i, plan):
-            d_plan = gradient_at(start_time, balloon, plan, wind)
-            return plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
-        return jax.lax.fori_loop(0, N, inner_opt, init_val=plan)
-
-    plan = optimize_plan(START_TIME, balloon, plan, wind_inst)
+    plan = optimize_plan(START_TIME, balloon, plan, wind_inst, steps=N)
     
 else:
         
