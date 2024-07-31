@@ -123,13 +123,13 @@ if JIT_LOOP:
         def inner_opt(i, plan):
             d_plan = gradient_at(start_time, balloon, plan, wind)
             return plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
-        return jax.lax.fori_loop(0, 1000, inner_opt, init_val=plan)
+        return jax.lax.fori_loop(0, N, inner_opt, init_val=plan)
 
     plan = optimize_plan(START_TIME, balloon, plan, wind_inst)
     
 else:
         
-    for i in range(1000):
+    for i in range(N):
         d_plan = gradient_at(START_TIME, balloon, plan, wind_inst)
         plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
 
