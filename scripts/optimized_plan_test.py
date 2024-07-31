@@ -107,6 +107,14 @@ JIT_LOOP = False
 _, log = run(START_TIME, balloon, plan, wind_inst)
 tplt.plot_on_map(log)
 
+
+print('Compiling code... ', end='')
+start = time.time()
+ignore = gradient_at(START_TIME, balloon, plan, wind_inst)
+print(f'Took {time.time() - start}s')
+
+N = 1000
+print(f'Running {N} steps of optimization...', end='')
 start = time.time()
 if JIT_LOOP:
 
@@ -125,8 +133,8 @@ else:
         d_plan = gradient_at(START_TIME, balloon, plan, wind_inst)
         plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
 
-
-print(f'Took: {time.time() - start} s')
+total = time.time() - start
+print(f'Took: {total}s, {total/N}s per iteration')
 
 _, log = run(START_TIME, balloon, plan, wind_inst)
 tplt.plot_on_map(log)

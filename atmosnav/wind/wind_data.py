@@ -97,6 +97,7 @@ class WindFromData(Wind):
         p = alt2p(altitude)
         return jnp.searchsorted(self.wind_legacy_levels, p)
 
+    @profile
     def get_direction(self, time, state):
         """
         Gets the direction of the wind movement at the state and a given time.
