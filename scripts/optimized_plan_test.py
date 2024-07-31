@@ -1,3 +1,4 @@
+import jax.test_util
 from atmosnav import *
 import atmosnav.trajplot as tplt
 import jax.numpy as jnp
@@ -40,7 +41,7 @@ balloon = make_weather_balloon(
 
 @jax.jit
 def run(start_time, balloon, plan, wind):
-    N = len(plan)*WAYPOINT_TIME_STEP//INTEGRATION_TIME_STEP
+    N = (len(plan)-1)*WAYPOINT_TIME_STEP//INTEGRATION_TIME_STEP
     log = {
         't': jnp.zeros((N, ), dtype=jnp.int32),
         'h': jnp.zeros((N, )), 
@@ -74,9 +75,8 @@ def run(start_time, balloon, plan, wind):
 
 
 from functools import partial 
-@jax.jit
-@partial(jax.grad, argnums=2)
-def gradient_at(start_time, balloon, plan, wind):
+
+def cost_at(start_time, balloon, plan, wind):
     # jax.debug.print("{start_time}, {balloon}, {plan}, {wind}", start_time=start_time, balloon=balloon, plan=plan, wind=wind)
     N = ((len(plan)-1)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
     def inner_run(i, time_balloon):
@@ -90,6 +90,8 @@ def gradient_at(start_time, balloon, plan, wind):
 
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
     return final_balloon.state[1]
+
+gradient_at = jax.jit(jax.grad(cost_at, argnums=2))
 
 import time
 
@@ -122,7 +124,6 @@ else:
     for i in range(1000):
         d_plan = gradient_at(START_TIME, balloon, plan, wind_inst)
         plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
-
 
 
 print(f'Took: {time.time() - start} s')

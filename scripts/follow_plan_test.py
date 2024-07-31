@@ -98,12 +98,14 @@ print(f'Took {time.time() - start}s')
 elapsed = 0.0
 N = 100
 print(f'Running {N} iterations... ', end='')
+logs = []
 for i in range(N):
     key, subkey = jax.random.split(key)
     offset = jax.random.uniform(subkey, minval=3, maxval=22)
     start = time.time()
     _, log = run(START_TIME, balloon, make_plan(WAYPOINT_COUNT, offset), wind)
+    logs.append(log)
     elapsed += (time.time() - start)
 
 print(f'Took {elapsed}s, {elapsed/N}s per iteration')
-tplt.plot_on_map(log)
+tplt.plot_on_map_many(logs)

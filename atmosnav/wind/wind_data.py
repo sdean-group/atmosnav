@@ -160,9 +160,8 @@ class WindFromData(Wind):
         θ_t = (time - tl) / (th - tl)
         θ_h = (h - hl) / (hh - hl)
         
-        p = jnp.zeros((2, 2, 2, 2, 2))
+        v0 = jnp.zeros((2, 2, 2, 2, 2))
 
-        
         def body_for_16(i, p):
             i0 = (i >> 0) & 1
             i1 = (i >> 1) & 1
@@ -171,37 +170,13 @@ class WindFromData(Wind):
             w = self.get_wind(file_idx + i3, (ilat + i2, ilon + i1), level_idx + sgn * i0)
             return p.at[(i3,i2, i1, i0, 0)].set(w[0]).at[(i3,i2, i1, i0, 1)].set(w[1])
 
-        p = jax.lax.fori_loop(0, 16, body_for_16, p)
+        v0 = jax.lax.fori_loop(0, 16, body_for_16, v0)
 
-        def body_for_8(i, p):
-            i1 = (i >> 0) & 1
-            i2 = (i >> 1) & 1
-            i3 = (i >> 2) & 1
-            p = p.at[(i3, i2, i1, 0, 0)].set(p[i3][i2][i1][0][0] * (1 - θ_h) + p[i3][i2][i1][1][0] * θ_h)
-            return p.at[(i3, i2, i1, 0, 1)].set(p[i3][i2][i1][0][1] * (1 - θ_h) + p[i3][i2][i1][1][1] * θ_h)
-
-        p = jax.lax.fori_loop(0, 8, body_for_8, p)
-        
-        def body_for_4(i, p):
-            i2 = (i >> 0) & 1
-            i3 = (i >> 1) & 1
-            p = p.at[(i3, i2, 0, 0, 0)].set(p[i3][i2][0][0][0] * (1 - θ_lon) + p[i3][i2][1][0][0] * θ_lon)
-            return p.at[(i3, i2, 0, 0, 1)].set(p[i3][i2][0][0][1] * (1 - θ_lon) + p[i3][i2][1][0][1] * θ_lon)
-
-        p = jax.lax.fori_loop(0, 4, body_for_4, p)
-
-        def body_for_2(i, p):
-            i3 = (i >> 0) & 1
-            return p.at[(i3,0,0,0,0)].set(p[i3][0][0][0][0] * (1 - θ_lat) + p[i3][1][0][0][0] * θ_lat)\
-                .at[(i3,0,0,0,1)].set( p[i3][0][0][0][1] * (1 - θ_lat) + p[i3][1][0][0][1] * θ_lat)
-        
-        p = jax.lax.fori_loop(0, 2, body_for_2, p)
-
-        p = p.at[(0,0,0,0,0)].set(p[0][0][0][0][0] * (1 - θ_t) + p[1][0][0][0][0] * θ_t)\
-            .at[(0,0,0,0,1)].set(p[0][0][0][0][1] * (1 - θ_t) + p[1][0][0][0][1] * θ_t)
-    
-        u = p[0][0][0][0][0]
-        v = p[0][0][0][0][1]
+        v1 = v0[:, :, :, 0] * (1 - θ_h) + v0[:, :, :, 1] * θ_h
+        v2 = v1[:, :, 0] * (1 - θ_lon) + v1[:, :, 1] * θ_lon
+        v3 = v2[:, 0] * (1 - θ_lat) + v2[:, 1] * θ_lat
+        v4 = v3[0] * (1 - θ_t) + v3[1] * θ_t
+        u, v = v4
 
         dv = v * self.idlat
         du = u * (self.idlat / jnp.cos((state[0] + dv * 0.5) * (math.pi / 180.0)))
