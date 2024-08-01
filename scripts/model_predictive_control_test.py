@@ -87,7 +87,7 @@ def make_constant_plan(upper, lower, horizon_time):
 
 @jax.jit
 def trajectory_at(start_time, balloon, plan, wind):
-    N = ((len(plan) )*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
+    N = (len(plan)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
     log = {
         't': jnp.zeros((N, ), dtype=jnp.int32),
         'h': jnp.zeros((N, )), 
@@ -122,7 +122,7 @@ def trajectory_at(start_time, balloon, plan, wind):
 @jax.jit
 @partial(jax.grad, argnums=2)
 def gradient_at(start_time, balloon, plan, wind):
-    N = ((len(plan)-1)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
+    N = (len(plan)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
     def inner_run(i, time_balloon):
         time, balloon = time_balloon
         # step the agent in time
