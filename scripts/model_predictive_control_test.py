@@ -229,10 +229,10 @@ tplt.plot_on_map(trajectory_at(START_TIME, balloon, optimal_plan_no_noise, wind_
 # Runs receeding horizon control
 print("Running MPC...")
 
-USING_JITTED = False
+USING_JITTED = True
 if USING_JITTED:
-    logs = unjitted_receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, wind_inst)
-    tplt.plot_on_map_many(logs)
-else:
     log = receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, wind_inst)
     tplt.plot_on_map(log)
+else:
+    logs = unjitted_receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, wind_inst)
+    tplt.plot_on_map_many(logs)
