@@ -142,7 +142,7 @@ def get_optimal_plan(start_time, balloon, plan, wind):
         time, balloon, plan = stuff
         d_plan = gradient_at(time, balloon, plan, wind)
         return time, balloon, plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
-    return jax.lax.fori_loop(0, 200, inner_opt, init_val=(start_time, balloon, plan))[-1]
+    return jax.lax.fori_loop(0, 1000, inner_opt, init_val=(start_time, balloon, plan))[-1]
 
 def test_plan(horizon_time):
     return make_constant_plan(1.0, 3.0, horizon_time)
@@ -150,7 +150,7 @@ def test_plan(horizon_time):
 @partial(jax.jit, static_argnums=(1,)) #changing time_elapsed causes recompilation because array sizes must be known statically
 def receeding_horizon_control(start_time, time_elapsed, balloon, observed_wind, true_wind):
     horizon_time = 60*60*24 # 1 day
-    follow_time = 60*60*12 # 9 hours
+    follow_time = 60*60*6 # 9 hours
 
     N = (time_elapsed//INTEGRATION_TIME_STEP)
     log = {
