@@ -3,16 +3,18 @@ import atmosnav.trajplot as tplt
 import jax.numpy as jnp
 import jax
 import numpy as np
+import time
 
 """
 This script reads wind data and runs a weather balloon and runs simulations starting
 from Ithaca while following a plan.
 
-Runs many iterations of the same plan to show that it is fast.
+Runs many iterations of the same plan to show that it is fast as running plans. Prints out
+the compilation time and the run time for some number of iterations.
 """
 
 # The wind data directory
-DATA_PATH = "../neotraj/data/proc/gfsanl/uv"
+DATA_PATH = "../data/small"
 
 # initial time (as unix timestamp), must exist within data
 START_TIME = 1691366400
@@ -24,7 +26,10 @@ INTEGRATION_TIME_STEP = 60*10
 WAYPOINT_TIME_STEP = 60*60*3
 
 # Load wind data
-wind = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+start = time.time()
+print('Loading wind data... ', end='')
+wind = WindFromData.from_data(DATA_PATH, INTEGRATION_TIME_STEP)
+print(f'Took {time.time() - start}s')
 
 # Create an agent
 
@@ -40,15 +45,9 @@ balloon = make_weather_balloon(
     START_TIME, WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP, 
     SEED)
 
-# Create a plan
-WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
-uppers = 10 + jnp.sin(2*np.pi*jnp.arange(WAYPOINT_COUNT)/10)
-lowers = uppers - 3
-plan = jnp.vstack([lowers,uppers]).T
-
 @jax.jit
 def run(start_time, balloon, plan, wind):
-    N = len(plan)*WAYPOINT_TIME_STEP//INTEGRATION_TIME_STEP
+    N = (len(plan)-1)*WAYPOINT_TIME_STEP//INTEGRATION_TIME_STEP
     log = {
         't': jnp.zeros((N, ), dtype=jnp.int32),
         'h': jnp.zeros((N, )), 
@@ -80,7 +79,33 @@ def run(start_time, balloon, plan, wind):
     return jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon, log))[1:]
 
 
-for i in range(100):
-    print(i)
-    _, log = run(START_TIME, balloon, plan, wind)
-tplt.plot_on_map(log)
+# Create a plan
+WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
+key = jax.random.key(seed=0)
+
+def make_plan(waypoints, vertical_offset):
+    uppers = vertical_offset + jnp.sin(2*np.pi*jnp.arange(waypoints)/10)
+    lowers = uppers - 3
+    return jnp.vstack([lowers,uppers]).T
+
+
+start = time.time()
+plan = make_plan(WAYPOINT_COUNT, 10)
+print('Compiling code... ', end='')
+_, log = run(START_TIME, balloon, plan, wind)
+print(f'Took {time.time() - start}s')
+
+elapsed = 0.0
+N = 100
+print(f'Running {N} iterations... ', end='')
+logs = []
+for i in range(N):
+    key, subkey = jax.random.split(key)
+    offset = jax.random.uniform(subkey, minval=3, maxval=22)
+    start = time.time()
+    _, log = run(START_TIME, balloon, make_plan(WAYPOINT_COUNT, offset), wind)
+    logs.append(log)
+    elapsed += (time.time() - start)
+
+print(f'Took {elapsed}s, {elapsed/N}s per iteration')
+tplt.plot_on_map_many(logs)

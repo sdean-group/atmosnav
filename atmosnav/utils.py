@@ -21,21 +21,3 @@ def alt2p(altitude: float) -> float:
             operand=alt),
         lambda alt: 128241. *jnp.exp(-0.000157686 * alt * 1000),
         operand=altitude)
-
-def bisect_left_jax(arr, x):
-    """ A left binary search implemented in XLA """
-    arr = jnp.asarray(arr)
-    low, high = 0, len(arr)
-    
-    def cond_fun(state):
-        low, high = state
-        return low < high
-    
-    def body_fun(state):
-        low, high = state
-        mid = (low + high) // 2
-        update = (arr[mid] < x)
-        return (lax.select(update, mid + 1, low), lax.select(update, high, mid))
-    
-    low, _ = lax.while_loop(cond_fun, body_fun, (low, high))
-    return low
