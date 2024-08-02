@@ -58,15 +58,8 @@ def optimize_plan(sim, start_time, balloon, plan, wind, steps, objective):
     return jax.lax.fori_loop(0, steps, inner_opt, init_val=plan)
 
 class FinalLongitude(Objective):
-    def evaluate(self, final_time, final_balloon):
-        return final_balloon.state[1]
-    
-    def evaluate_log(self, log):
-        # jax.debug.print(log)
-        return log['lon'][-1]
-
-    def evaluate_scan(self, log):
-        return log[1].state[-1][1]
+    def evaluate(self, times, states):
+        return states[-1][1]
 
     def tree_flatten(self): 
         return tuple(), {}
