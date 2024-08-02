@@ -49,10 +49,29 @@ class DifferentiableSimulator(JaxTree):
         final_time, final_balloon, log = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, airborne, log))
         return (final_time, final_balloon), log
 
+    # @jax.jit
+    # def cost_at(self, start_time, airborne, plan, wind, objective):
+    #     N = (len(plan)-1)*self.waypoint_time_step//self.integration_time_step
+
+    #     def inner_run(i, time_and_balloon):
+    #         time, balloon = time_and_balloon
+
+    #         # step the agent in time
+    #         next_balloon, info = balloon.step(time, plan, wind.get_direction(time, balloon.state))
+            
+    #         # jump dt
+    #         next_time = time + self.integration_time_step
+
+    #         return next_time, next_balloon
+        
+    #     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, airborne))
+    #     return objective.evaluate(final_time, final_balloon)
+
+    @jax.jit
     def cost_at(self, start_time, airborne, plan, wind, objective):
         N = (len(plan)-1)*self.waypoint_time_step//self.integration_time_step
 
-        def inner_run(i, time_and_balloon):
+        def inner_run(time_and_balloon, _):
             time, balloon = time_and_balloon
 
             # step the agent in time
@@ -61,16 +80,22 @@ class DifferentiableSimulator(JaxTree):
             # jump dt
             next_time = time + self.integration_time_step
 
-            return next_time, next_balloon
+            carry = next_time, next_balloon
+            return carry, carry
         
-        final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, airborne))
-        return objective.evaluate(final_time, final_balloon)
+        (final_time, final_balloon), log = jax.lax.scan(inner_run, init=(start_time, airborne), xs=None, length=N)
+        return objective.evaluate_scan(log)
+
+    # @jax.jit
+    # def cost_at(self, start_time, airborne, plan, wind, objective):
+    #     (final_time, final_airborne), log = self.trajectory_at(start_time, airborne, plan, wind)
+    #     return objective.evaluate_log(log) # objective.evaluate(final_time, final_airborne)
 
     @jax.jit
     def gradient_at(self, start_time, airborne, plan, wind, objective):
         return jax.grad(self.cost_at, argnums=2)(start_time, airborne, plan, wind, objective)
 
-    def tree_flatten(self): 
+    def tree_flatten(self):
         return (), {'waypoint_time_step': self.waypoint_time_step, 'integration_time_step': self.integration_time_step}
     
     @classmethod
