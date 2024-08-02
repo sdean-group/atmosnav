@@ -6,7 +6,7 @@ import abc
 class Objective(JaxTree): # TODO: move to another file with a corresponding folder for objective functions
     
     @abc.abstractmethod
-    def evaluate(self, log):
+    def evaluate(self, final_time, final_airborne):
         pass
 
 class DifferentiableSimulator(JaxTree):
@@ -64,7 +64,7 @@ class DifferentiableSimulator(JaxTree):
             return next_time, next_balloon
         
         final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, airborne))
-        return final_balloon.state[1]
+        return objective.evaluate(final_time, final_balloon)
 
     @jax.jit
     def gradient_at(self, start_time, airborne, plan, wind, objective):
