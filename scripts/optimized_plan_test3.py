@@ -10,7 +10,7 @@ This script performs trajectory optimization on the original plan.
 """
 
 # The wind data directory
-DATA_PATH = "/Users/bradleyguo/Python Projects/atmosnav/atmosnav/data/proc/gfsanl/uv"
+DATA_PATH = "../data/small"
 
 # initial time (as unix timestamp), must exist within data
 START_TIME = 1691366400
@@ -38,7 +38,7 @@ plan = np.vstack([lowers,uppers]).T
 plan = 10*np.ones((WAYPOINT_COUNT, 1))
 
 # Load wind data
-wind = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+wind = WindFromData.from_data(DATA_PATH, INTEGRATION_TIME_STEP)
 
 
 # Create an agent
@@ -128,7 +128,7 @@ start = time.time()
 
 optimizer = optax.adam(learning_rate = 0.03)
 opt_state = optimizer.init(plan)
-for _ in range(30000):
+for _ in range(5000):
     grad = gradient_at(START_TIME, balloon, plan, wind)
     updates, opt_state = optimizer.update(grad, opt_state, plan)
     plan = optax.apply_updates(plan, updates)
