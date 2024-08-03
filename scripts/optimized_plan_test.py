@@ -50,9 +50,8 @@ def run(start_time, balloon, plan, wind):
         'h': jnp.zeros((N, )), 
         'lat': jnp.zeros((N, )), 
         'lon': jnp.zeros((N, )),
-        # 'lbnd': jnp.zeros((N, )),
-        # 'ubnd': jnp.zeros((N, ))}
-        'plan': jnp.zeros((N, ))}
+        'lbnd': jnp.zeros((N, )),
+        'ubnd': jnp.zeros((N, ))}
 
     def inner_run(i, time_and_balloon_and_log):
         time, balloon, log = time_and_balloon_and_log
@@ -66,9 +65,8 @@ def run(start_time, balloon, plan, wind):
             'h':log['h'].at[i].set(balloon.state[2]),
             'lat':log['lat'].at[i].set(balloon.state[0]),
             'lon':log['lon'].at[i].set(balloon.state[1]),
-            # 'lbnd':log['lbnd'].at[i].set(info['control_input'][0]),
-            # 'ubnd':log['ubnd'].at[i].set(info['control_input'][1])}
-            'plan':log['plan'].at[i].set(info['control_input'][0])}
+            'lbnd':log['lbnd'].at[i].set(info['control_input'][0]),
+            'ubnd':log['ubnd'].at[i].set(info['control_input'][1])}
         
         # jump dt
         next_time = time + INTEGRATION_TIME_STEP
@@ -115,7 +113,7 @@ lowers = uppers - 3
 plan = np.vstack([lowers,uppers]).T
 
 
-JIT_LOOP = False
+JIT_LOOP = True
 
 _, log = run(START_TIME, balloon, plan, wind_inst)
 tplt.plot_on_map(log)
@@ -132,7 +130,7 @@ print(f'Took {time.time() - start}s')
 
     
 
-N = 1000
+N = 5000
 print(f'Running {N} steps of optimization...', end='')
 start = time.time()
 if JIT_LOOP:
