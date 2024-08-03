@@ -1,3 +1,4 @@
+import jax.test_util
 from atmosnav import *
 import atmosnav.trajplot as tplt
 import jax.numpy as jnp
@@ -9,7 +10,7 @@ This script performs trajectory optimization on the original plan.
 """
 
 # The wind data directory
-DATA_PATH = "/Users/bradleyguo/Python Projects/atmosnav/atmosnav/data/proc/gfsanl/uv"
+DATA_PATH = "../data/small"
 
 # initial time (as unix timestamp), must exist within data
 START_TIME = 1691366400
@@ -22,7 +23,7 @@ WAYPOINT_TIME_STEP = 60*60*3
 
 
 # Load wind data
-wind = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+wind_inst = WindFromData.from_data(DATA_PATH, integration_time_step=INTEGRATION_TIME_STEP)
 
 
 # Create an agent
@@ -40,18 +41,10 @@ balloon = make_weather_balloon(
     START_TIME, WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP, 
     SEED)
 
-# Create a plan
-WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
-# uppers = 10 + jnp.sin(2*np.pi*np.arange(WAYPOINT_COUNT)/10)
-# lowers = uppers - 3
-# plan = np.vstack([lowers,uppers]).T
-plan = 0*np.ones((WAYPOINT_COUNT, 1))
-
-
 
 @jax.jit
 def run(start_time, balloon, plan, wind):
-    N = len(plan)*WAYPOINT_TIME_STEP//INTEGRATION_TIME_STEP
+    N = (len(plan)-1)*WAYPOINT_TIME_STEP//INTEGRATION_TIME_STEP
     log = {
         't': jnp.zeros((N, ), dtype=jnp.int32),
         'h': jnp.zeros((N, )), 
@@ -87,10 +80,10 @@ def run(start_time, balloon, plan, wind):
 
 destination = (40.4168, 3.7038)
 from functools import partial 
-@jax.jit
-@partial(jax.grad, argnums=2)
-def gradient_at(start_time, balloon, plan, wind):
-    N = (len(plan)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
+
+def cost_at(start_time, balloon, plan, wind):
+    # jax.debug.print("{start_time}, {balloon}, {plan}, {wind}", start_time=start_time, balloon=balloon, plan=plan, wind=wind)
+    N = ((len(plan)-1)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
     def inner_run(i, time_balloon):
         time, balloon = time_balloon
         # step the agent in time
@@ -98,43 +91,62 @@ def gradient_at(start_time, balloon, plan, wind):
 
         # jump dt
         next_time = time + INTEGRATION_TIME_STEP
-
         return next_time, next_balloon
 
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
     #return -final_balloon.state[1]
     return -((final_balloon.state[0]-destination[0])**2 + (final_balloon.state[1]+destination[1])**2 + (final_balloon.state[2])**2) 
 
+gradient_at = jax.jit(jax.grad(cost_at, argnums=2))
+
+@jax.jit
+def optimize_plan(start_time, balloon, plan, wind, steps):
+    def inner_opt(i, plan):
+        d_plan = gradient_at(start_time, balloon, plan, wind)
+        return plan + 0.5 * d_plan / jnp.linalg.norm(d_plan)
+    return jax.lax.fori_loop(0, steps, inner_opt, init_val=plan)
+
 import time
 
-JIT_LOOP = True
+# Create a plan
+WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
+uppers = 10 + jnp.sin(2*np.pi*np.arange(WAYPOINT_COUNT)/10)
+lowers = uppers - 3
+plan = np.vstack([lowers,uppers]).T
 
-_, log = run(START_TIME, balloon, plan, wind)
-# tplt.plot_on_map(log)
-tplt.deterministic_plot_on_map(log)
 
+JIT_LOOP = False
+
+_, log = run(START_TIME, balloon, plan, wind_inst)
+tplt.plot_on_map(log)
+
+
+print('Compiling code... ', end='')
+start = time.time()
+
+if JIT_LOOP:
+    ignore = optimize_plan(START_TIME, balloon, plan, wind_inst, 1)
+else:
+    ignore = gradient_at(START_TIME, balloon, plan, wind_inst)
+print(f'Took {time.time() - start}s')
+
+    
+
+N = 1000
+print(f'Running {N} steps of optimization...', end='')
 start = time.time()
 if JIT_LOOP:
 
-    @jax.jit
-    def optimize_plan(start_time, balloon, plan, wind):
-        def inner_opt(i, plan):
-            d_plan = gradient_at(start_time, balloon, plan, wind)
-            return plan + 2 * d_plan / jnp.linalg.norm(d_plan)
-        return jax.lax.fori_loop(0, 10000, inner_opt, init_val=plan)
-
-    plan = optimize_plan(START_TIME, balloon, plan, wind)
+    plan = optimize_plan(START_TIME, balloon, plan, wind_inst, steps=N)
     
 else:
         
-    for i in range(1000):
-        d_plan = gradient_at(START_TIME, balloon, plan, wind)
+    for i in range(N):
+        d_plan = gradient_at(START_TIME, balloon, plan, wind_inst)
         plan = plan + 0.5 * d_plan / np.linalg.norm(d_plan)
 
+total = time.time() - start
+print(f'Took: {total}s, {total/N}s per iteration')
 
-
-print(f'Took: {time.time() - start} s')
-
-_, log = run(START_TIME, balloon, plan, wind)
-# tplt.plot_on_map(log)
-tplt.deterministic_plot_on_map(log)
+_, log = run(START_TIME, balloon, plan, wind_inst)
+tplt.plot_on_map(log)

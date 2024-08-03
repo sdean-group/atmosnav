@@ -1,4 +1,4 @@
-from atmosnav import Airborne, SimpleAltitudeModel, AltitudeModel, PlanToWaypointController, WindFromData
+from atmosnav import *
 import atmosnav.trajplot as tplt
 import jax.numpy as jnp
 import jax
@@ -28,7 +28,7 @@ WAYPOINT_TIME_STEP = 60*60*3
 # Load wind data
 start = time.time()
 print('Loading wind data... ', end='')
-wind = WindFromData.from_data(DATA_PATH, INTEGRATION_TIME_STEP)
+wind_inst = WindFromData.from_data(DATA_PATH, INTEGRATION_TIME_STEP)
 print(f'Took {time.time() - start}s')
 
 # Create an agent
@@ -37,48 +37,13 @@ def make_weather_balloon(init_lat, init_lon, start_time, waypoint_time_step, int
     return Airborne(
         jnp.array([ init_lat, init_lon, 0.0, 0.0 ]),
         PlanToWaypointController(start_time=start_time, waypoint_time_step=waypoint_time_step),
-        SimpleAltitudeModel())
-        #AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
+        AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
 
 SEED = 0 
 balloon = make_weather_balloon(
     42.4410187, -76.4910089, 
     START_TIME, WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP, 
     SEED)
-
-@jax.jit
-def run(start_time, balloon, plan, wind):
-    N = (len(plan)-1)*WAYPOINT_TIME_STEP//INTEGRATION_TIME_STEP
-    log = {
-        't': jnp.zeros((N, ), dtype=jnp.int32),
-        'h': jnp.zeros((N, )), 
-        'lat': jnp.zeros((N, )), 
-        'lon': jnp.zeros((N, )),
-        'lbnd': jnp.zeros((N, )),
-        'ubnd': jnp.zeros((N, ))}
-
-    def inner_run(i, time_and_balloon_and_log):
-        time, balloon, log = time_and_balloon_and_log
-
-        # step the agent in time
-        next_balloon, info = balloon.step(time, plan, wind.get_direction(time, balloon.state))
-        
-        # update the log
-        next_log = {
-            't':log['t'].at[i].set(time.astype(int)),
-            'h':log['h'].at[i].set(balloon.state[2]),
-            'lat':log['lat'].at[i].set(balloon.state[0]),
-            'lon':log['lon'].at[i].set(balloon.state[1]),
-            'lbnd':log['lbnd'].at[i].set(info['control_input'][0]),
-            'ubnd':log['ubnd'].at[i].set(info['control_input'][1])}
-        
-        # jump dt
-        next_time = time + INTEGRATION_TIME_STEP
-
-        return next_time, next_balloon, next_log
-
-    return jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon, log))[1:]
-
 
 # Create a plan
 WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
@@ -89,11 +54,14 @@ def make_plan(waypoints, vertical_offset):
     lowers = uppers - 3
     return jnp.vstack([lowers,uppers]).T
 
+# Create simulator
+
+sim = DifferentiableSimulator(WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP)
 
 start = time.time()
 plan = make_plan(WAYPOINT_COUNT, 10)
 print('Compiling code... ', end='')
-_, log = run(START_TIME, balloon, plan, wind)
+_, log = sim.trajectory_at(START_TIME, balloon, plan, wind_inst)
 print(f'Took {time.time() - start}s')
 
 elapsed = 0.0
@@ -104,7 +72,7 @@ for i in range(N):
     key, subkey = jax.random.split(key)
     offset = jax.random.uniform(subkey, minval=3, maxval=22)
     start = time.time()
-    _, log = run(START_TIME, balloon, make_plan(WAYPOINT_COUNT, offset), wind)
+    _, log = sim.trajectory_at(START_TIME, balloon, make_plan(WAYPOINT_COUNT, offset), wind_inst)
     logs.append(log)
     elapsed += (time.time() - start)
 
