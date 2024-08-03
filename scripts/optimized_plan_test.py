@@ -109,7 +109,7 @@ lowers = uppers - 3
 plan = np.vstack([lowers,uppers]).T
 
 
-JIT_LOOP = True
+JIT_LOOP = False
 
 _, log = run(START_TIME, balloon, plan, wind_inst)
 tplt.plot_on_map(log)
