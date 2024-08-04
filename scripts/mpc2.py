@@ -26,7 +26,7 @@ while True:
 """
 
 # The wind data directory
-DATA_PATH = "/Users/bradleyguo/Python Projects/atmosnav/atmosnav/data/proc/gfsanl/uv"
+DATA_PATH = "../data/small"
 
 # initial time (as unix timestamp), must exist within data
 START_TIME = 1691366400
@@ -37,7 +37,7 @@ INTEGRATION_TIME_STEP = 60*10
 # The time between waypoint
 WAYPOINT_TIME_STEP = 60*60*3
 
-wind_inst = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+wind_inst = WindFromData.from_data(DATA_PATH, INTEGRATION_TIME_STEP)
 
 # Load wind data
 class WithDisturbance(Wind):
@@ -84,6 +84,7 @@ start = (42.4410187, -76.4910089, 0)
 #destination = (51.5072, -0.1276, 0) #London
 destination = (42.3601, -71.0589, 0) #Boston
 #destination = (37.4419, -122.1430, 0) #Palo Alto
+# destination = (40.7128, -74.0060, 0.0) # New York City
 
 
 SEED = 0 
@@ -96,7 +97,7 @@ balloon = make_weather_balloon(
 @partial(jax.jit, static_argnums=(3,))
 def make_plan(start_time, balloon, wind, horizon_time, discount=0.99, vertical_weight=111):
     num_plans = 5000
-    key = jax.random.key(time.time())
+    key = jax.random.key(time.time_ns())
     WAYPOINT_COUNT = horizon_time//WAYPOINT_TIME_STEP+1
     init_plan = jnp.zeros((WAYPOINT_COUNT, 1))
     init_cost = cost_at(START_TIME, balloon, init_plan, wind)
