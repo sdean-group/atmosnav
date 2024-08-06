@@ -47,10 +47,10 @@ LOCATIONS = {
 START = 'ithaca'
 DESTINATION = 'reykjavik'
 
-DISCOUNT_FACTOR, VERTICAL_WEIGHT = 0.99, 111
-MAX_OPTIMIZER_STEPS = 100
+DISCOUNT_FACTOR, WEIGHTS = 0.99, (1.0, 1.0, 0.0)
+MAX_OPTIMIZER_STEPS = 10000
 
-ELAPSED_TIME, HORIZON_TIME, FOLLOW_TIME = 60*60*24*7, 60*60*24*3, 60*60*9
+ELAPSED_TIME, HORIZON_TIME, FOLLOW_TIME = 60*60*24*7, 60*60*24*1, 60*60*9
 
 ##################
 # HELPER CODE    
@@ -61,7 +61,7 @@ ELAPSED_TIME, HORIZON_TIME, FOLLOW_TIME = 60*60*24*7, 60*60*24*3, 60*60*9
 #TODO: generate N plans, then calculate the cost all at once by vectorizing
 # @partial(jax.jit, static_argnums=(4,)) # --> horizon time
 def get_initial_plan(sim, start_time, balloon, wind, horizon_time, objective):
-    num_plans = 100
+    num_plans = 5000
     key = jax.random.key(time.time_ns())
     WAYPOINT_COUNT = horizon_time//WAYPOINT_TIME_STEP+1
     init_plan = jnp.zeros((WAYPOINT_COUNT, 1))
@@ -116,18 +116,20 @@ class FinalDistance(Objective):
         return FinalDistance(*children)
     
 class DiscountedDistance(Objective):
-    def __init__(self, destination, discount, vertical_weight):
+    def __init__(self, destination, discount, weights):
         self.destination = jnp.array(destination)
         self.discount = discount
-        self.vertical_weight = vertical_weight
+        self.weights = jnp.array(weights)
 
     def evaluate(self, times, states):
-        # TODO: implement discounted distance
-        delta = (self.destination - states[-1][0:3])
-        return delta @ delta
+        discount_weights = jnp.power(self.discount, jnp.arange(len(states)-1, -1 , -1))
+        weighted_squared_sum = jnp.sum(((self.destination - states[:, :3])**2) * self.weights, axis=-1)
+        discounted_distances = weighted_squared_sum * discount_weights
+        cost = jnp.sum(discounted_distances)
+        return cost
 
     def tree_flatten(self): 
-        return (self.destination, self.discount, self.vertical_weight), {}
+        return (self.destination, self.discount, self.weights), {}
     
     @classmethod
     def tree_unflatten(cls, aux_data, children):
@@ -137,10 +139,24 @@ class DiscountedDistance(Objective):
 # TODO: replace this with optax optimizer
 # @jax.jit
 def optimize_plan(sim, start_time, balloon, plan, wind, steps, objective):
-    def inner_opt(i, plan):
-        d_plan = sim.gradient_at(start_time, balloon, plan, wind, objective)
-        return plan - 0.5 * d_plan / jnp.linalg.norm(d_plan)
-    return jax.lax.fori_loop(0, steps, inner_opt, init_val=plan)
+    # def inner_opt(i, plan):
+    #     d_plan = sim.gradient_at(start_time, balloon, plan, wind, objective)
+    #     return plan - 0.5 * d_plan / jnp.linalg.norm(d_plan)
+    # return jax.lax.fori_loop(0, steps, inner_opt, init_val=plan)
+
+    optimizer = optax.adam(learning_rate = 0.03)
+    opt_state = optimizer.init(plan)
+    grad = sim.gradient_at(start_time, balloon, plan, wind, objective)
+
+    def step(i, grad_opt_state_plan):
+        grad, opt_state, plan = grad_opt_state_plan
+        updates, opt_state = optimizer.update(grad, opt_state, plan)
+        plan = optax.apply_updates(plan, updates)
+        grad = sim.gradient_at(start_time, balloon, plan, wind, objective)
+
+        return grad, opt_state, plan
+
+    return jax.lax.fori_loop(0, steps, step, init_val = (grad, opt_state, plan))[-1]
 
 def get_optimal_plan(sim, start_time, balloon, elapsed_time, wind, steps, objective):
     initial_plan = get_initial_plan(sim, start_time, balloon, wind, elapsed_time, objective)
@@ -178,11 +194,13 @@ if __name__ == "__main__":
     balloon = make_weather_balloon(LOCATIONS[START], START_TIME, WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP)
 
     sim = DifferentiableSimulator(WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP)
-    obj = FinalDistance(LOCATIONS[DESTINATION], DISCOUNT_FACTOR, VERTICAL_WEIGHT)
+    obj = DiscountedDistance(LOCATIONS[DESTINATION], DISCOUNT_FACTOR, WEIGHTS)
 
     optimal_plan = get_optimal_plan(sim, START_TIME, balloon, ELAPSED_TIME, wind_inst, MAX_OPTIMIZER_STEPS, obj)
     _, log = sim.trajectory_at(START_TIME, balloon, optimal_plan, wind_inst)
     tplt.plot_on_map(log, filename='mpc3/nompc.png')
+    print(log['lon'][-1])
 
     _, log = mpc(sim, START_TIME, balloon, wind_inst, wind_inst, HORIZON_TIME, FOLLOW_TIME, ELAPSED_TIME, obj, MAX_OPTIMIZER_STEPS)
+    print(log['lon'][-1])
     tplt.plot_on_map(log, filename='mpc3/withmpc.png')

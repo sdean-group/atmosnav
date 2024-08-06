@@ -77,12 +77,12 @@ def make_weather_balloon(init_lat, init_lon, init_height, start_time, waypoint_t
 #Start and end
 start = (42.4410187, -76.4910089, 0)
 #destination = (42.4410187, -76.4910089, 0) #Ithaca
-#destination = (40.4168, -3.7038, 0) #Madrid
-#destination = (64.1470, -21.9408, 0) #Reykjavik
+# destination = (40.4168, -3.7038, 0) #Madrid
+destination = (64.1470, -21.9408, 0) #Reykjavik
 #destination = (44.3876, -68.2039, 0) #Bar Harbor
 #destination = (41.8781, -87.6298, 0) #Chicago
-#destination = (51.5072, -0.1276, 0) #London
-destination = (42.3601, -71.0589, 0) #Boston
+destination = (51.5072, -0.1276, 0) #London
+# destination = (42.3601, -71.0589, 0) #Boston
 #destination = (37.4419, -122.1430, 0) #Palo Alto
 # destination = (40.7128, -74.0060, 0.0) # New York City
 
