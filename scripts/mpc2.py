@@ -73,9 +73,8 @@ def make_weather_balloon(init_lat, init_lon, init_height, start_time, waypoint_t
 #Start and end
 start = (42.4410187, -76.4910089, 0)
 
-destinations = {"Boston":jnp.array([42.3601, -71.0589, 0]),
+destinations = {
                 "Bar Harbor":jnp.array([44.3876, -68.2039, 0]),
-                "Madrid":jnp.array([40.4168, -3.7038, 0]),
                 "Reykjavik":jnp.array([64.1470, -21.9408, 0]),
                 "Chicago":jnp.array([41.8781, -87.6298, 0]),
                 "London":jnp.array([51.5072, -0.1276, 0]),
@@ -350,7 +349,7 @@ def unjitted_receeding_horizon_control(start_time, time_elapsed, balloon, observ
         'plan':log['plan'][:log_idx]}
 
     #return log
-    return (balloon.state[0]-destination[0])**2 + (balloon.state[1]-destination[1])**2 + ((balloon.state[2]-destination[2])/111)**2, time-start_time
+    return log, (balloon.state[0]-destination[0])**2 + (balloon.state[1]-destination[1])**2 + ((balloon.state[2]-destination[2])/111)**2, time-start_time
 
 
 ELAPSED_TIME = 60*60*24*7
@@ -366,9 +365,16 @@ ELAPSED_TIME = 60*60*24*7
 # Runs receeding horizon control
 print("Running MPC...")
  # 9 hours
+import matplotlib.pyplot as plt
+
 for destination in destinations.keys():
     print(destination)
+    plt.figure(figsize=(10,6))
+    ax1 = tplt.make_map_axis(ncol=2, nrow=1, pos=1)
     for i in range(10):
         key=jax.random.key(i)
-        print(unjitted_receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, WithDisturbance(wind_inst, key), key, destinations[destination]))
+        log, distance, time = unjitted_receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, WithDisturbance(wind_inst, key), key, destinations[destination])
+        ax1.plot(log['lon'],log['lat'])
+        print(distance, time)
+    plt.show()
 # tplt.deterministic_plot_on_map(logs)

@@ -46,13 +46,14 @@ class WithDisturbance(Wind):
 # Start and end
 start = (42.4410187, -76.4910089, 0)
 
-destinations = {"Boston":jnp.array([42.3601, -71.0589, 0]),
-                "Bar Harbor":jnp.array([44.3876, -68.2039, 0]),
-                "Madrid":jnp.array([40.4168, -3.7038, 0]),
+destinations = {"Bar Harbor":jnp.array([44.3876, -68.2039, 0]),
                 "Reykjavik":jnp.array([64.1470, -21.9408, 0]),
                 "Chicago":jnp.array([41.8781, -87.6298, 0]),
                 "London":jnp.array([51.5072, -0.1276, 0]),
                 }
+#"Boston":jnp.array([42.3601, -71.0589, 0]),
+# "Madrid":jnp.array([40.4168, -3.7038, 0]),
+
 
 # Load wind data
 wind_inst = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
@@ -203,12 +204,17 @@ def optimized_test(balloon, observed_wind, true_wind, destination):
 
 #print(f'Took: {time.time() - start} s')
 
+import matplotlib.pyplot as plt
 
 for destination in destinations.keys():
     print(destination)
+    plt.figure(figsize=(10,6))
+    ax1 = tplt.make_map_axis(ncol=2, nrow=1, pos=1)
     for i in range(10):
         key=jax.random.key(i)
         end_balloon, log = optimized_test(balloon, wind_inst, WithDisturbance(wind_inst, key), destinations[destination])
+        ax1.plot(log['lon'],log['lat'])
         print((end_balloon.state[0]-destinations[destination][0])**2 + (end_balloon.state[1]-destinations[destination][1])**2 + ((end_balloon.state[2]-destinations[destination][2])/111)**2)
+    plt.show()
 # tplt.plot_on_map(log)
 #tplt.deterministic_plot_on_map(log)
