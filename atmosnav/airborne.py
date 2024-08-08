@@ -7,6 +7,8 @@ import jax.numpy as jnp
 
 from .jaxtree import JaxTree
 
+from line_profiler import profile
+
 # StepType = tuple[Array, Controller, Dynamics]
 
 class Airborne(JaxTree):
@@ -33,6 +35,7 @@ class Airborne(JaxTree):
         self.dynamics = dynamics
 
 
+    @profile
     def step(self, time: jnp.float32, action: Array, wind_vector: Array) -> tuple[Self, dict]:
         """ Returns an updated agent at the next time step. 
         

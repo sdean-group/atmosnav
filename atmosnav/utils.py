@@ -1,14 +1,9 @@
 from jax import lax
 import jax.numpy as jnp
 
-def p2alt(pressure):
+def p2alt(p):
     """ Converts air pressure to altitude."""
-    return lax.cond(
-        pressure > 22632.1,
-        lambda p:44330.7 * (1 - (p / 101325.0) ** 0.190266) / 1000.0,
-        lambda p: -6341.73 * jnp.log((0.176481 * p) / 22632.1) / 1000.0,
-        operand=pressure
-    )
+    return jnp.where(p > 22632.1, 44330.7 * (1 - (p / 101325.0) ** 0.190266) / 1000.0, -6341.73 * jnp.log((0.176481 * p) / 22632.1) / 1000.0 )
 
 def alt2p(altitude: float) -> float:
     """ Converts altitude to air pressure. """

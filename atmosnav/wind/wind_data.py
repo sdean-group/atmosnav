@@ -111,8 +111,7 @@ class WindFromData(Wind):
             du (jnp.float32): The diretcion along longitude
         """
         file_idx = self.get_index(time)
-        file_idx = lax.cond(file_idx == 0, lambda _: 1, lambda idx: idx, operand=file_idx)
-        file_idx -= 1
+        file_idx = jnp.where(file_idx==0, 1, file_idx) - 1
         
         tl = self.wind_ts[file_idx]
         th = self.wind_ts[file_idx + 1]
@@ -120,23 +119,12 @@ class WindFromData(Wind):
         h = jnp.clip(state[2], 0, 22)
 
         level_idx = self.get_level(h)
-        
-        level_idx = jax.lax.cond(
-            level_idx == self.wind_cfg.num_levels,
-            lambda _: self.wind_cfg.num_levels - 1,
-            lambda _: level_idx,
-            operand=None
-        )
-        
-        h = jax.lax.cond(
-            level_idx == self.wind_cfg.num_levels - 1,
-            lambda idx: 1.0 * p2alt(self.wind_legacy_levels[idx]),
-            lambda _: 1.0 * h,
-            operand=level_idx
-        )
+        level_idx = jnp.where(level_idx == self.wind_cfg.num_levels, self.wind_cfg.num_levels-1, level_idx)
 
-        hh = p2alt(self.wind_legacy_levels[level_idx - 1])
-        hl = p2alt(self.wind_legacy_levels[level_idx])
+        h = jnp.where(level_idx==self.wind_cfg.num_levels-1, p2alt(self.wind_legacy_levels[level_idx]), h)
+
+        levels = jax.lax.dynamic_slice(self.wind_legacy_levels, (level_idx-1, ), (2, ))
+        hh, hl = p2alt(levels)
         sgn = -1
         
 

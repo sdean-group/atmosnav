@@ -60,6 +60,25 @@ def plot_on_map(r, filename=None):
     else:
         plt.savefig(filename)
 
+def plot_on_map_scan(r, filename=None):
+    times, states = r
+    dates = [datetime.fromtimestamp(t) for t in times] 
+    plt.figure(figsize=(10,6))
+    ax1 = make_map_axis(ncol=2, nrow=1, pos=1) #oops, ncol and nrows are flipped here
+    ax1.plot(states[:, 1],states[:, 0])
+    ax2 = plt.subplot(2,1,2)
+
+    ax2.plot(dates, states[:, 2])
+    # ax2.plot(dates, r['lbnd'], '--', color='black', alpha=0.5)
+    # ax2.plot(dates, r['ubnd'], '--', color='black', alpha=0.5)
+
+    ax2.grid()
+    ax2.set_ylabel('Altitude (km)')
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename)
+
 
 def plot_on_map_many(rs, filename=None):
     dates = [datetime.fromtimestamp(t) for t in rs[0]['t']] 
