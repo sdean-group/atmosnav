@@ -4,6 +4,7 @@ import jax.numpy as jnp
 from jax import Array, lax
 from ..jaxtree import JaxTree
 import math
+import time as tm
 
 class SimpleAltitudeModel(Dynamics):
     def control_input_to_delta_state(self, time: jnp.float32, state: Array, control_input: Array, wind_vector: Array):
@@ -42,6 +43,36 @@ class DeterministicAltitudeModel(Dynamics):
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return DeterministicAltitudeModel(aux_data['dt'])
+    
+class NoisyAltitudeModel(Dynamics):
+
+    def __init__(self, integration_time_step, key):
+        self.dt = integration_time_step
+        self.vlim = 1.7
+        self.key = key
+
+    def control_input_to_delta_state(self, time: jnp.float32, state: Array, control_input: Array, wind_vector: Array):
+        h = self.update(state, control_input[0])
+        h = jnp.clip(h, 0, 22)
+        wind_factor = jnp.absolute((2.0/(1.0+jnp.exp(-20000.0*h)) - 1.0))
+        self.key, subkey = jax.random.split(self.key, 2)
+        return jnp.array([ wind_vector[0], wind_vector[1], h - state[2] + wind_factor*0.5*jax.random.normal(subkey), 0.0]), self
+    
+    def update(self, state, waypoint):
+        return lax.cond(jnp.abs(waypoint-state[2]) > self.vlim / 3600.0 * self.dt,
+                        lambda op: op[0][2] + self.vlim / 3600.0 * self.dt * jnp.sign(op[1]-op[0][2]),
+                        lambda op: op[1],
+                        operand = (state, waypoint))
+    
+
+    def tree_flatten(self):
+        children = (self.key,)  # arrays / dynamic values
+        aux_data = {'dt':self.dt, 'vlim':self.vlim}  # static values
+        return (children, aux_data)
+    
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return NoisyAltitudeModel(aux_data['dt'], children[0])
 
 SinApproxT = 10 * 60
 

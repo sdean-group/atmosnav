@@ -21,18 +21,41 @@ INTEGRATION_TIME_STEP = 60*10
 # The time between waypoint
 WAYPOINT_TIME_STEP = 60*60*3
 
+# Load wind data
+class WithDisturbance(Wind):
+    def __init__(self, wind, key):
+        self.wind = wind
+        self.key = key
+
+    def get_direction(self, time: jnp.float32, state: Array) -> tuple[jnp.float32, jnp.float32]:
+        dv, du = self.wind.get_direction(time, state) 
+        self.key, subkey = jax.random.split(self.key)
+        dv_noise, du_noise = self.get_disturbance(subkey)
+        return (dv*(1+dv_noise), du*(1+du_noise))
+
+    def get_disturbance(self, key):
+        return 0.25*jax.random.normal(key, (2,))
+    
+    def tree_flatten(self):
+        return (self.wind, self.key), {}
+    
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return WithDisturbance(*children)
+        
 # Start and end
 start = (42.4410187, -76.4910089, 0)
-#destination = (42.4410187, -76.4910089, 0) #Ithaca
-#destination = (40.4168, -3.7038, 0) #Madrid
-#destination = (64.1470, -21.9408, 0) #Reykjavik
-#destination = (44.3876, -68.2039, 0) #Bar Harbor
-destination = (41.8781, -87.6298, 0) #Chicago
-#destination = (51.5072, -0.1276, 0) #London
-#destination = (42.3601, -71.0589, 0) #Boston
+
+destinations = {"Boston":jnp.array([42.3601, -71.0589, 0]),
+                "Bar Harbor":jnp.array([44.3876, -68.2039, 0]),
+                "Madrid":jnp.array([40.4168, -3.7038, 0]),
+                "Reykjavik":jnp.array([64.1470, -21.9408, 0]),
+                "Chicago":jnp.array([41.8781, -87.6298, 0]),
+                "London":jnp.array([51.5072, -0.1276, 0]),
+                }
 
 # Load wind data
-wind = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
+wind_inst = WindFromData.from_data(DATA_PATH, start_time=START_TIME, integration_time_step=INTEGRATION_TIME_STEP)
 
 # Create an agent
 
@@ -91,7 +114,7 @@ discount = 0.99
 from functools import partial 
 @jax.jit
 @partial(jax.grad, argnums=2)
-def gradient_at(start_time, balloon, plan, wind):
+def gradient_at(start_time, balloon, plan, wind, destination):
     N = (len(plan)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
     def inner_run(i, time_balloon_cost):
         time, balloon, cost = time_balloon_cost
@@ -110,11 +133,11 @@ def gradient_at(start_time, balloon, plan, wind):
     return cost
 
 @jax.jit
-def cost_at(start_time, balloon, plan, wind):
+def cost_at(start_time, balloon, plan, wind, destination):
     N = (len(plan)*WAYPOINT_TIME_STEP)//INTEGRATION_TIME_STEP
     def inner_run(i, time_balloon_cost):
         time, balloon, cost = time_balloon_cost
-        cost += discount**(N-1-i)*((balloon.state[0]-destination[0])**2 + (balloon.state[1]-destination[1])**2 + ((balloon.state[2]-destination[2])/111)**2) 
+        cost += discount**(N-1-i)*((balloon.state[0]-destination[0])**2 + (balloon.state[1]-destination[1])**2 + ((balloon.state[2]-destination[2]))**2) 
         # step the agent in time
         next_balloon, _ =balloon.step(time, plan, wind.get_direction(time, balloon.state))
 
@@ -132,9 +155,9 @@ def cost_at(start_time, balloon, plan, wind):
 import time
 
 # Create a plan
-WAYPOINT_COUNT = 40 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
+WAYPOINT_COUNT = 56 #  Total sim time = Waypoint Count * Waypoint Time Step = 40 * 3 hours = 5 days
 num_plans = 5000
-def make_plan(num_plans, WAYPOINT_COUNT):
+def make_plan(num_plans, WAYPOINT_COUNT, wind, destination):
         
     plans = [np.zeros((WAYPOINT_COUNT, 1))]
 
@@ -146,34 +169,46 @@ def make_plan(num_plans, WAYPOINT_COUNT):
     best_cost = np.inf
     for i, plan in enumerate(plans):
         
-        cost = cost_at(START_TIME, balloon, plan, wind)
+        cost = cost_at(START_TIME, balloon, plan, wind, destination)
         if cost < best_cost:
             best_plan = i
             best_cost = cost
 
     plan = plans[best_plan]
     return plan
-plan = make_plan(num_plans, WAYPOINT_COUNT)
 
-_, log = run(START_TIME, balloon, plan, wind)
-# tplt.plot_on_map(log)
-tplt.deterministic_plot_on_map(log)
+# _, log = run(START_TIME, balloon, plan, wind)
+# # tplt.plot_on_map(log)
+# tplt.deterministic_plot_on_map(log)
 
 start = time.time()
 
-optimizer = optax.adam(learning_rate = 0.03)
-opt_state = optimizer.init(plan)
-grad = gradient_at(START_TIME, balloon, plan, wind)
+def get_optimal_plan(balloon, plan, wind, destination):
+    optimizer = optax.adam(learning_rate = 0.03)
+    opt_state = optimizer.init(plan)
+    grad = gradient_at(START_TIME, balloon, plan, wind, destination)
 
-for i in range(10000):
-    updates, opt_state = optimizer.update(grad, opt_state, plan)
-    plan = optax.apply_updates(plan, updates)
-    grad = gradient_at(START_TIME, balloon, plan, wind)
+    for i in range(10000):
+        updates, opt_state = optimizer.update(grad, opt_state, plan)
+        plan = optax.apply_updates(plan, updates)
+        grad = gradient_at(START_TIME, balloon, plan, wind, destination)
+    
+    return plan
 
-print(f'Took: {time.time() - start} s')
+def optimized_test(balloon, observed_wind, true_wind, destination):
+    plan = make_plan(5000, WAYPOINT_COUNT, observed_wind, destination)
+    plan = get_optimal_plan(balloon, plan, observed_wind, destination)
+    return run(START_TIME, balloon, plan, true_wind)
 
 
-balloon, log = run(START_TIME, balloon, plan, wind)
-print((balloon.state[0]-destination[0])**2 + (balloon.state[1]-destination[1])**2 + ((balloon.state[2]-destination[2])/111)**2)
+#print(f'Took: {time.time() - start} s')
+
+
+for destination in destinations.keys():
+    print(destination)
+    for i in range(10):
+        key=jax.random.key(i)
+        end_balloon, log = optimized_test(balloon, wind_inst, WithDisturbance(wind_inst, key), destinations[destination])
+        print((end_balloon.state[0]-destinations[destination][0])**2 + (end_balloon.state[1]-destinations[destination][1])**2 + ((end_balloon.state[2]-destinations[destination][2])/111)**2)
 # tplt.plot_on_map(log)
-tplt.deterministic_plot_on_map(log)
+#tplt.deterministic_plot_on_map(log)

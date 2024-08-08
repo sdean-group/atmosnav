@@ -1,2 +1,2 @@
 from .dynamics import *
-from .altitude_model import AltitudeModel, SimpleAltitudeModel, DeterministicAltitudeModel
+from .altitude_model import AltitudeModel, SimpleAltitudeModel, DeterministicAltitudeModel, NoisyAltitudeModel
