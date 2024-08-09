@@ -62,27 +62,6 @@ class DifferentiableSimulator(JaxTree):
         final_time, final_balloon, log = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, airborne, log))
         return (final_time, final_balloon), log
 
-    # @jax.jit
-    # @profile
-    # def trajectory_at(self, start_time, airborne, plan, wind):
-    #     N = (len(plan)-1)*self.waypoint_time_step//self.integration_time_step
-
-    #     def inner_run(time_and_balloon, _):
-    #         time, balloon = time_and_balloon
-
-    #         # step the agent in time
-    #         next_balloon, info = balloon.step(time, plan, wind.get_direction(time, balloon.state))
-            
-    #         # jump dt
-    #         next_time = time + self.integration_time_step
-
-    #         carry = next_time, next_balloon
-    #         return carry, (next_time, next_balloon.state)
-        
-    #     return jax.lax.scan(inner_run, init=(start_time, airborne), xs=None, length=N)
-
-
-
     @jax.jit
     def cost_at(self, start_time, airborne, plan, wind, objective):
         N = (len(plan)-1)*self.waypoint_time_step//self.integration_time_step
@@ -99,7 +78,8 @@ class DifferentiableSimulator(JaxTree):
             carry = next_time, next_balloon
             return carry, (next_time, next_balloon.state)
         
-        return jax.lax.scan(inner_run, init=(start_time, airborne), xs=None, length=N)
+        (final_time, final_balloon), log = jax.lax.scan(inner_run, init=(start_time, airborne), xs=None, length=N)
+        return objective.evaluate(log[0], log[1])
         
 
     @jax.jit
