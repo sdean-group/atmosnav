@@ -1,7 +1,11 @@
 
 from .controller import Controller
-from jax import Array
+# from jax import Array
+
+
 import jax.numpy as jnp
+
+Array = 'jax array'
 
 def lerp(a, b, t):
     return a + t * (b - a)

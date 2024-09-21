@@ -8,7 +8,7 @@ setup(
     author='Myles Pasetsky, Janna Lin, Bradley Guo',
     author_email='mhp58@cornell.edu, jnl77@cornell.edu, bzg4@cornell.edu',
     packages=find_packages(include=['atmosnav*']),
-    python_requires='>=3.12.0',
+#    python_requires='>=3.12.0',
     install_requires = ['matplotlib','tropycal','shapely','cartopy','jax','jaxlib'],
     extras_require={},
     entry_points={},
