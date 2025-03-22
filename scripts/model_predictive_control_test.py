@@ -134,7 +134,8 @@ def gradient_at(start_time, balloon, plan, wind):
         return next_time, next_balloon
 
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
-    return final_balloon.state[1] # final longitude
+    #return final_balloon.state[1] # final longitude
+    return -((final_balloon.state[0]-42.4410187)**2 + (final_balloon.state[1]+76.4910089)**2)
 
 @jax.jit
 def get_optimal_plan(start_time, balloon, plan, wind):
@@ -218,13 +219,15 @@ def unjitted_receeding_horizon_control(start_time, time_elapsed, balloon, observ
 
     return logs
 
-ELAPSED_TIME = 60*60*24*3
+ELAPSED_TIME = 60*60*24*5
 
 
 # Get the optimal plan in the observed wind data, but then run it in the real wind field
 print("Without MPC...")
 optimal_plan_no_noise = get_optimal_plan(START_TIME, balloon, test_plan(ELAPSED_TIME), wind_inst) 
-tplt.plot_on_map(trajectory_at(START_TIME, balloon, optimal_plan_no_noise, wind_inst)[-1])
+_, _, log = trajectory_at(START_TIME, balloon, optimal_plan_no_noise, wind_inst)
+print(log['lon'][-1])
+tplt.plot_on_map(log)
 
 # Runs receeding horizon control
 print("Running MPC...")
@@ -232,6 +235,7 @@ print("Running MPC...")
 USING_JITTED = True
 if USING_JITTED:
     log = receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, wind_inst)
+    print(log['lon'][-1])
     tplt.plot_on_map(log)
 else:
     logs = unjitted_receeding_horizon_control(START_TIME, ELAPSED_TIME, balloon, wind_inst, wind_inst)

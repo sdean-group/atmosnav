@@ -21,20 +21,23 @@ INTEGRATION_TIME_STEP = 60*10
 # The time between waypoint
 WAYPOINT_TIME_STEP = 60*60*3
 
+
 # Load wind data
 wind_inst = WindFromData.from_data(DATA_PATH, integration_time_step=INTEGRATION_TIME_STEP)
 
+
 # Create an agent
 
-def make_weather_balloon(init_lat, init_lon, start_time, waypoint_time_step, integration_time_step, seed):
+def make_weather_balloon(init_lat, init_lon, init_height, start_time, waypoint_time_step, integration_time_step, seed):
     return Airborne(
-        jnp.array([ init_lat, init_lon, 0.0, 0.0 ]),
+        jnp.array([ init_lat, init_lon, init_height, 0.0 ]),
         PlanToWaypointController(start_time=start_time, waypoint_time_step=waypoint_time_step),
-        AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
+        DeterministicAltitudeModel(integration_time_step=integration_time_step))
+        #AltitudeModel(integration_time_step=integration_time_step, key=jax.random.key(seed)))
 
 SEED = 0 
 balloon = make_weather_balloon(
-    42.4410187, -76.4910089, 
+    42.4410187, -76.4910089, 12.0, 
     START_TIME, WAYPOINT_TIME_STEP, INTEGRATION_TIME_STEP, 
     SEED)
 
@@ -73,7 +76,7 @@ def run(start_time, balloon, plan, wind):
     return jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon, log))[1:]
 
 
-
+destination = (40.4168, 3.7038)
 from functools import partial 
 
 def cost_at(start_time, balloon, plan, wind):
@@ -89,7 +92,8 @@ def cost_at(start_time, balloon, plan, wind):
         return next_time, next_balloon
 
     final_time, final_balloon = jax.lax.fori_loop(0, N, inner_run, init_val=(start_time, balloon))
-    return final_balloon.state[1]
+    #return -final_balloon.state[1]
+    return -((final_balloon.state[0]-destination[0])**2 + (final_balloon.state[1]+destination[1])**2 + (final_balloon.state[2])**2) 
 
 gradient_at = jax.jit(jax.grad(cost_at, argnums=2))
 
@@ -109,7 +113,7 @@ lowers = uppers - 3
 plan = np.vstack([lowers,uppers]).T
 
 
-JIT_LOOP = False
+JIT_LOOP = True
 
 _, log = run(START_TIME, balloon, plan, wind_inst)
 tplt.plot_on_map(log)
@@ -126,7 +130,7 @@ print(f'Took {time.time() - start}s')
 
     
 
-N = 1000
+N = 5000
 print(f'Running {N} steps of optimization...', end='')
 start = time.time()
 if JIT_LOOP:

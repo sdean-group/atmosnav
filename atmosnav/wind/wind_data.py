@@ -118,6 +118,7 @@ class WindFromData(Wind):
         th = self.wind_ts[file_idx + 1]
        
         h = jnp.clip(state[2], 0, 22)
+        wind_factor = jnp.absolute((2.0/(1.0+jnp.exp(-20000.0*h)) - 1.0))
 
         level_idx = self.get_level(h)
         
@@ -168,7 +169,7 @@ class WindFromData(Wind):
             i1 = (i >> 1) & 1
             i2 = (i >> 2) & 1
             i3 = (i >> 3) & 1
-            w = self.get_wind(file_idx + i3, (ilat + i2, ilon + i1), level_idx + sgn * i0)
+            w = wind_factor * self.get_wind(file_idx + i3, (ilat + i2, ilon + i1), level_idx + sgn * i0)
             return p.at[(i3,i2, i1, i0, 0)].set(w[0]).at[(i3,i2, i1, i0, 1)].set(w[1])
 
         v0 = jax.lax.fori_loop(0, 16, body_for_16, v0)
