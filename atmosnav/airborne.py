@@ -1,12 +1,16 @@
-from typing import Self
+# from typing import Self
+Self = 'Airborne'
+
 from .controllers import Controller
 from .dynamics import Dynamics
 import jax
-from jax import Array
+# from jax import Array
 import jax.numpy as jnp
 
 from .jaxtree import JaxTree
 
+
+Array = 'jax array'
 # StepType = tuple[Array, Controller, Dynamics]
 
 class Airborne(JaxTree):

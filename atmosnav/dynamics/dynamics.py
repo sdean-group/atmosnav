@@ -1,10 +1,13 @@
-from typing import Self
+# from typing import Self
+
+Self = 'Dynamics'
 
 import abc
 from ..jaxtree import JaxTree
 
 import jax.numpy as jnp
-from jax import Array
+# from jax import Array
+Array = 'jax array'
 
 import jax
 

@@ -1,7 +1,9 @@
 import abc
 from ..jaxtree import JaxTree
 import jax.numpy as jnp
-from jax import Array
+# from jax import Array
+
+Array = 'jax array'
 
 class Wind(JaxTree):
 

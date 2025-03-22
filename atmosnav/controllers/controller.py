@@ -1,11 +1,14 @@
-from typing import Self
+# from typing import Self
+Self = 'Controller'
 
 import abc
 import jax.numpy as jnp
 from ..jaxtree import JaxTree
 
-from jax import Array
+# from jax import Array
 import jax
+
+Array = 'jax array'
 
 class Controller(JaxTree):
     """ 

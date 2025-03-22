@@ -6,9 +6,12 @@
 from .dynamics import Dynamics
 import jax
 import jax.numpy as jnp
-from jax import Array, lax
+from jax import lax
+
 from ..jaxtree import JaxTree
 import math
+
+Array = 'jax array' 
 
 class SimpleAltitudeModel(Dynamics):
     def control_input_to_delta_state(self, time: jnp.float32, state: Array, control_input: Array, wind_vector: Array):

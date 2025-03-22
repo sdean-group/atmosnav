@@ -11,7 +11,7 @@ from jax import lax
 import jax.numpy as jnp
 from dataclasses import dataclass
 import json
-from line_profiler import profile
+# from line_profiler import profile
 from .wind import Wind
 from ..utils import *
 
@@ -97,12 +97,12 @@ class WindFromData(Wind):
         assert len(self.wind_ts) != 0, "wind_ts should not be length 0, data is not loaded properly"
         return jnp.searchsorted(self.wind_ts, t)
 
-    @profile
+    # @profile
     def get_level(self, altitude: float) -> int:
         p = alt2p(altitude)
         return jnp.searchsorted(self.wind_legacy_levels, p)
 
-    @profile
+    # @profile
     def get_direction(self, time, state):
         """
         Gets the direction of the wind movement at the state and a given time.
