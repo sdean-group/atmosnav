@@ -1,3 +1,8 @@
+# 
+# Adapted by students at Cornell based on original code by Windborne Systems. 
+# This is research code under active development and is not guaranteed to be stable or correct.
+#
+
 import time
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
